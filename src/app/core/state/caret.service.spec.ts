@@ -68,4 +68,24 @@ describe('CaretService', () => {
 
     expect(caret.position().measureIndex).toBe(1);
   });
+
+  it('moves right and left across element boundaries and measures', () => {
+    // Measure 0 holds two quarters (not full), measure 1 a half note.
+    caret.moveRight();
+    expect(caret.position()).toEqual({ measureIndex: 0, voice: 0, tick: 64 });
+    caret.moveRight();
+    caret.moveRight();
+    expect(caret.position()).toEqual({ measureIndex: 1, voice: 0, tick: 0 });
+    caret.moveLeft();
+    expect(caret.position()).toEqual({ measureIndex: 0, voice: 0, tick: 128 });
+  });
+
+  it('does not move past either end of the score', () => {
+    caret.moveLeft();
+    expect(caret.position()).toEqual(CARET_START);
+
+    caret.moveToEnd();
+    caret.moveRight();
+    expect(caret.position()).toEqual({ measureIndex: 1, voice: 0, tick: 128 });
+  });
 });

@@ -3,9 +3,12 @@ import {
   durationToTicks,
   elementBoundaries,
   endOfScore,
+  caretStops,
   insertionIndex,
   measureCapacityTicks,
+  nextCaret,
   normalizeCaret,
+  previousCaret,
   snapTick,
 } from './caret.util';
 import { createEmptyScore, createMeasure, createNote, createRest, Score } from './score.model';
@@ -83,6 +86,28 @@ describe('caret.util', () => {
       expect(normalizeCaret(score, { measureIndex: 0, voice: 2, tick: 0 }).voice).toBe(0);
     });
 
+    it('expresses the end of a full, non-last measure as the start of the next one', () => {
+      expect(normalizeCaret(score, { measureIndex: 0, voice: 0, tick: 256 })).toEqual({
+        measureIndex: 1,
+        voice: 0,
+        tick: 0,
+      });
+    });
+
+    it('keeps the end of the last measure even when it is full', () => {
+      const fullLast = scoreWithMeasures(halfPlusQuarters);
+      expect(normalizeCaret(fullLast, { measureIndex: 0, voice: 0, tick: 256 }).tick).toBe(256);
+    });
+
+    it('keeps the end of an incomplete non-last measure', () => {
+      const incomplete = scoreWithMeasures(createMeasure([createNote('C', 4, 'quarter')]), halfPlusQuarters);
+      expect(normalizeCaret(incomplete, { measureIndex: 0, voice: 0, tick: 64 })).toEqual({
+        measureIndex: 0,
+        voice: 0,
+        tick: 64,
+      });
+    });
+
     it('snaps the tick against the clamped measure', () => {
       expect(normalizeCaret(score, { measureIndex: 1, voice: 0, tick: 200 }).tick).toBe(64);
     });
@@ -104,6 +129,60 @@ describe('caret.util', () => {
       expect(insertionIndex(halfPlusQuarters, 0)).toBe(0);
       expect(insertionIndex(halfPlusQuarters, 128)).toBe(1);
       expect(insertionIndex(halfPlusQuarters, 256)).toBe(3);
+    });
+  });
+
+  describe('navigation', () => {
+    const full = () => createMeasure([createNote('C', 4, 'half'), createNote('D', 4, 'half')]);
+    const score = () => scoreWithMeasures(full(), createMeasure([createRest('quarter')]));
+
+    it('lists stops without a duplicate at the barline', () => {
+      expect(caretStops(score())).toEqual([
+        { measureIndex: 0, voice: 0, tick: 0 },
+        { measureIndex: 0, voice: 0, tick: 128 },
+        { measureIndex: 1, voice: 0, tick: 0 },
+        { measureIndex: 1, voice: 0, tick: 64 },
+      ]);
+    });
+
+    it('moves right through elements', () => {
+      expect(nextCaret(score(), { measureIndex: 0, voice: 0, tick: 0 }).tick).toBe(128);
+    });
+
+    it('crosses the barline going right', () => {
+      expect(nextCaret(score(), { measureIndex: 0, voice: 0, tick: 128 })).toEqual({
+        measureIndex: 1,
+        voice: 0,
+        tick: 0,
+      });
+    });
+
+    it('stays at the end of the score when moving right', () => {
+      expect(nextCaret(score(), { measureIndex: 1, voice: 0, tick: 64 })).toEqual({
+        measureIndex: 1,
+        voice: 0,
+        tick: 64,
+      });
+    });
+
+    it('crosses the barline going left', () => {
+      expect(previousCaret(score(), { measureIndex: 1, voice: 0, tick: 0 })).toEqual({
+        measureIndex: 0,
+        voice: 0,
+        tick: 128,
+      });
+    });
+
+    it('stays at the start of the score when moving left', () => {
+      expect(previousCaret(score(), CARET_START)).toEqual(CARET_START);
+    });
+
+    it('treats the end of a full measure as the start of the next when navigating', () => {
+      expect(nextCaret(score(), { measureIndex: 0, voice: 0, tick: 256 })).toEqual({
+        measureIndex: 1,
+        voice: 0,
+        tick: 64,
+      });
     });
   });
 });

@@ -4,7 +4,9 @@ import {
   CaretPosition,
   endOfScore,
   insertionIndex,
+  nextCaret,
   normalizeCaret,
+  previousCaret,
 } from '../models/caret.util';
 import { ScoreModelService } from './score-model.service';
 
@@ -27,6 +29,14 @@ export class CaretService {
 
   setPosition(position: CaretPosition): void {
     this.requested.set(normalizeCaret(this.scoreModel.score(), position));
+  }
+
+  moveLeft(): void {
+    this.requested.set(previousCaret(this.scoreModel.score(), this.position()));
+  }
+
+  moveRight(): void {
+    this.requested.set(nextCaret(this.scoreModel.score(), this.position()));
   }
 
   moveToStart(): void {

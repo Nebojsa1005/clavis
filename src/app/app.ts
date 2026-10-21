@@ -4,6 +4,7 @@ import { ExportService } from './core/services/export.service';
 import { PersistenceService } from './core/services/persistence.service';
 import { PlaybackService } from './core/services/playback.service';
 import { CaretService } from './core/state/caret.service';
+import { EditingService } from './core/state/editing.service';
 import { NoteInputService } from './core/state/note-input.service';
 import { ScoreModelService } from './core/state/score-model.service';
 import { SelectionService } from './core/state/selection.service';
@@ -45,6 +46,7 @@ export class App {
   protected readonly scoreModel = inject(ScoreModelService);
   protected readonly selection = inject(SelectionService);
   private readonly caret = inject(CaretService);
+  private readonly editing = inject(EditingService);
   protected readonly playback = inject(PlaybackService);
   private readonly exportService = inject(ExportService);
   private readonly persistence = inject(PersistenceService);
@@ -174,6 +176,12 @@ export class App {
 
   @HostListener('document:keydown', ['$event'])
   protected onKeydown(event: KeyboardEvent): void {
+    // Typing in the tempo field or using a dropdown must not trigger editor shortcuts.
+    const target = event.target;
+    if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) {
+      return;
+    }
+
     if (event.key.toLowerCase() === 'n') {
       this.noteInput.toggle();
       event.preventDefault();
@@ -204,13 +212,31 @@ export class App {
     }
 
     if (event.key === 'Delete' || event.key === 'Backspace') {
-      const id = this.selection.selectedId();
-      if (id) {
-        this.scoreModel.deleteElement(id);
-        this.selection.clear();
+      if (this.selection.count() > 0) {
+        this.editing.deleteSelection();
         event.preventDefault();
       }
       return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey) {
+      switch (event.key.toLowerCase()) {
+        case 'c':
+          if (this.editing.copySelection()) {
+            event.preventDefault();
+          }
+          return;
+        case 'x':
+          if (this.selection.count() > 0) {
+            this.editing.cutSelection();
+            event.preventDefault();
+          }
+          return;
+        case 'v':
+          this.editing.paste();
+          event.preventDefault();
+          return;
+      }
     }
 
     if (!this.noteInput.active()) {

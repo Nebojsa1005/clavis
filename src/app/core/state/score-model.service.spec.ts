@@ -243,6 +243,90 @@ describe('ScoreModelService', () => {
     });
   });
 
+  describe('deleteElements', () => {
+    const fill = () => {
+      service.replaceScore(createEmptyScore());
+      for (const step of ['C', 'D', 'E', 'F', 'G'] as const) {
+        service.appendElement(createNote(step, 4, 'quarter'));
+      }
+      const [first, second] = service.score().measures;
+      return [...first.elements, ...second.elements].map((el) => el.id);
+    };
+
+    it('removes several elements at once, across measures', () => {
+      const ids = fill();
+
+      service.deleteElements([ids[1], ids[2], ids[4]]);
+
+      const steps = service.score().measures.flatMap((m) => m.elements.map((el) => el.kind === 'note' && el.pitch.step));
+      expect(steps).toEqual(['C', 'F']);
+    });
+
+    it('is a single undo step', () => {
+      const ids = fill();
+
+      service.deleteElements([ids[0], ids[1], ids[2]]);
+      service.undo();
+
+      expect(service.score().measures.flatMap((m) => m.elements).length).toBe(5);
+    });
+
+    it('drops trailing empty measures but keeps the first one', () => {
+      const ids = fill();
+
+      service.deleteElements([ids[4]]);
+      expect(service.score().measures.length).toBe(1);
+
+      service.deleteElements(ids.slice(0, 4));
+      expect(service.score().measures.length).toBe(1);
+      expect(service.score().measures[0].elements.length).toBe(0);
+    });
+
+    it('leaves an empty middle measure in place', () => {
+      const ids = fill();
+      service.appendElement(createNote('A', 4, 'whole'));
+      const secondMeasure = service.score().measures[1].elements.map((el) => el.id);
+
+      service.deleteElements(secondMeasure);
+
+      expect(service.score().measures.length).toBe(3);
+      expect(service.score().measures[1].elements.length).toBe(0);
+      expect(ids.length).toBe(5);
+    });
+
+    it('ignores unknown ids without adding an undo step', () => {
+      fill();
+      service.replaceScore(service.score());
+
+      service.deleteElements(['nope']);
+
+      expect(service.canUndo()).toBeFalse();
+    });
+  });
+
+  describe('insertElements', () => {
+    it('inserts several elements as one undo step', () => {
+      service.replaceScore(createEmptyScore());
+      service.appendElement(createNote('C', 4, 'quarter'));
+      service.appendElement(createNote('G', 4, 'quarter'));
+
+      service.insertElements(0, 1, [createNote('D', 4, 'quarter'), createNote('E', 4, 'quarter')]);
+      const steps = () => service.score().measures.flatMap((m) => m.elements.map((el) => el.kind === 'note' && el.pitch.step));
+      expect(steps()).toEqual(['C', 'D', 'E', 'G']);
+
+      service.undo();
+      expect(steps()).toEqual(['C', 'G']);
+    });
+
+    it('does nothing for an empty list', () => {
+      service.replaceScore(createEmptyScore());
+
+      service.insertElements(0, 0, []);
+
+      expect(service.canUndo()).toBeFalse();
+    });
+  });
+
   describe('undo/redo', () => {
     it('reverts the last mutation on undo', () => {
       service.replaceScore(createEmptyScore());

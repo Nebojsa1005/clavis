@@ -1,4 +1,4 @@
-import { elementTicks, measureCapacityTicks } from './caret.util';
+import { elementTicks, insertionIndex, measureCapacityTicks, positionAfterElement } from './caret.util';
 import { createMeasure, Measure, MeasureElement, Score, TimeSignature } from './score.model';
 
 function totalTicks(elements: MeasureElement[]): number {
@@ -50,6 +50,32 @@ export function insertWithReflow(
   cascadeOverflow(measures, measureIndex, capacity);
 
   return { ...score, measures };
+}
+
+/**
+ * Inserts several elements one after the other starting at the given spot, each right behind the
+ * previous one even when reflow pushed that one into a later measure.
+ */
+export function insertManyWithReflow(
+  score: Score,
+  measureIndex: number,
+  index: number,
+  elements: readonly MeasureElement[],
+): Score {
+  let current = score;
+  let nextMeasure = measureIndex;
+  let nextIndex = index;
+
+  for (const element of elements) {
+    current = insertWithReflow(current, nextMeasure, nextIndex, element);
+    const after = positionAfterElement(current, element.id);
+    if (!after) {
+      break;
+    }
+    nextMeasure = after.measureIndex;
+    nextIndex = insertionIndex(current.measures[nextMeasure], after.tick);
+  }
+  return current;
 }
 
 /**

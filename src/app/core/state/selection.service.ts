@@ -24,6 +24,15 @@ export class SelectionService {
     return this.orderedIds().filter((id) => raw.has(id));
   });
 
+  /** Selected notes and rests in score order. */
+  readonly selectedElements = computed(() => {
+    const raw = this.rawIds();
+    return this.scoreModel
+      .score()
+      .measures.flatMap((measure) => measure.elements)
+      .filter((element) => raw.has(element.id));
+  });
+
   /** The selected id when exactly one element is selected, otherwise null. */
   readonly selectedId = computed(() => {
     const ids = this.selectedIds();

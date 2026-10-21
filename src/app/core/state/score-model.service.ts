@@ -1,5 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { changeTimeSignature, insertWithReflow } from '../models/insert.util';
+import { changeTimeSignature, insertManyWithReflow, insertWithReflow } from '../models/insert.util';
 import { durationToBeats, stepDiatonic } from '../models/notation.util';
 import { Clef, createMeasure, createTestScore, MeasureElement, Score, TimeSignature } from '../models/score.model';
 import { isKeySignature } from '../models/key-signature.util';
@@ -86,6 +86,14 @@ export class ScoreModelService {
     this.mutate((score) => insertWithReflow(score, measureIndex, index, element));
   }
 
+  /** Inserts several elements in order as ONE undo step; see `insertManyWithReflow`. */
+  insertElements(measureIndex: number, index: number, elements: readonly MeasureElement[]): void {
+    if (elements.length === 0) {
+      return;
+    }
+    this.mutate((score) => insertManyWithReflow(score, measureIndex, index, elements));
+  }
+
   /**
    * Moves the pitch of the nearest note before the given position (skipping rests, crossing
    * barlines) by `delta` diatonic steps. `index` counts the elements before the caret in the measure.
@@ -111,13 +119,30 @@ export class ScoreModelService {
     });
   }
 
-  /** Briše element (notu/pauzu) po id-u, gde god u partituri da se nalazi. */
+  /** Removes an element (note or rest) by id, wherever it is in the score. */
   deleteElement(id: string): void {
+    this.deleteElements([id]);
+  }
+
+  /**
+   * Removes several elements as ONE undo step. Later elements move up; measures that end up empty
+   * at the end of the score are dropped (the first measure always stays). Unknown ids are ignored.
+   */
+  deleteElements(ids: readonly string[]): void {
+    const doomed = new Set(ids);
+    const exists = this.scoreState().measures.some((measure) => measure.elements.some((el) => doomed.has(el.id)));
+    if (!exists) {
+      return;
+    }
+
     this.mutate((score) => {
       const measures = score.measures.map((measure) => ({
         ...measure,
-        elements: measure.elements.filter((el) => el.id !== id),
+        elements: measure.elements.filter((el) => !doomed.has(el.id)),
       }));
+      while (measures.length > 1 && measures[measures.length - 1].elements.length === 0) {
+        measures.pop();
+      }
       return { ...score, measures };
     });
   }

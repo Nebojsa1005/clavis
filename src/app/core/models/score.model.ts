@@ -84,6 +84,13 @@ export function createRest(duration: NoteDuration, dotted = false): Rest {
   return { id: createId(), kind: 'rest', duration, ...(dotted ? { dotted: true } : {}) };
 }
 
+/** Deep copy of a note or rest with a fresh id (used when pasting). */
+export function cloneElement(element: MeasureElement): MeasureElement {
+  return element.kind === 'note'
+    ? { ...element, id: createId(), pitch: { ...element.pitch } }
+    : { ...element, id: createId() };
+}
+
 export function createMeasure(elements: MeasureElement[]): Measure {
   return { id: createId(), elements };
 }

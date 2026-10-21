@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { App } from './app';
 import { CARET_CLASS, NotationRendererService } from './core/services/notation-renderer.service';
 import { PersistenceService } from './core/services/persistence.service';
-import { createEmptyScore, createMeasure, createNote, MeasureElement } from './core/models/score.model';
+import { createEmptyScore, createMeasure, createNote, MeasureElement, Step } from './core/models/score.model';
 import { CaretService } from './core/state/caret.service';
 import { NoteInputService } from './core/state/note-input.service';
 import { ScoreModelService } from './core/state/score-model.service';
@@ -19,7 +19,7 @@ describe('Caret editing (integration)', () => {
   let noteInput: NoteInputService;
   let renderer: NotationRendererService;
 
-  const quarters = (...steps: ('C' | 'D' | 'E' | 'F' | 'G')[]): MeasureElement[] =>
+  const quarters = (...steps: Step[]): MeasureElement[] =>
     steps.map((step) => createNote(step, 4, 'quarter'));
 
   function setup(...measures: MeasureElement[][]): void {
@@ -411,6 +411,104 @@ describe('Caret editing (integration)', () => {
       scoreModel.undo();
 
       expect(selection.count()).toBe(2);
+    });
+  });
+
+  describe('range operations', () => {
+    let selection: SelectionService;
+
+    beforeEach(() => {
+      selection = TestBed.inject(SelectionService);
+    });
+
+    const nodes = () => host().querySelectorAll('[data-score-element-id]');
+    const clickNode = (index: number, modifiers: MouseEventInit = {}) => {
+      nodes()[index].dispatchEvent(new MouseEvent('click', { bubbles: true, ...modifiers }));
+      fixture.detectChanges();
+    };
+    const ctrl = (key: string) => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey: true }));
+      fixture.detectChanges();
+    };
+    const all = () => scoreModel.score().measures.flatMap((m) => m.elements.map((el) => (el.kind === 'note' ? el.pitch.step : 'r')));
+
+    it('deletes a shift-selected range with the Delete key', () => {
+      setup(quarters('C', 'D', 'E', 'F'));
+      clickNode(1);
+      clickNode(2, { shiftKey: true });
+
+      press('Delete');
+
+      expect(all()).toEqual(['C', 'F']);
+      expect(selection.count()).toBe(0);
+      expect(nodes().length).toBe(2);
+    });
+
+    it('deletes a whole measure picked by clicking empty staff', () => {
+      setup(quarters('C', 'D', 'E', 'F'), quarters('G', 'A'));
+      const secondMeasureX = renderer.getCaretX({ measureIndex: 1, voice: 0, tick: 0 })!;
+      const rect = host().getBoundingClientRect();
+      host().dispatchEvent(
+        new MouseEvent('click', { bubbles: true, clientX: rect.left + secondMeasureX + 5, clientY: rect.top + 20 }),
+      );
+      fixture.detectChanges();
+
+      press('Backspace');
+
+      expect(all()).toEqual(['C', 'D', 'E', 'F']);
+      expect(scoreModel.score().measures.length).toBe(1);
+    });
+
+    it('copies a selection and pastes it at the caret', () => {
+      setup(quarters('C', 'D', 'E', 'F'));
+      clickNode(0);
+      clickNode(1, { shiftKey: true });
+      ctrl('c');
+      press('Escape');
+      press('n');
+      caret.moveToEnd();
+
+      ctrl('v');
+
+      expect(all()).toEqual(['C', 'D', 'E', 'F', 'C', 'D']);
+      expect(selection.count()).toBe(2);
+    });
+
+    it('cuts and pastes elsewhere', () => {
+      setup(quarters('C', 'D', 'E', 'F'));
+      clickNode(0);
+      ctrl('x');
+      expect(all()).toEqual(['D', 'E', 'F']);
+
+      selection.select(scoreModel.score().measures[0].elements[2].id);
+      ctrl('v');
+
+      expect(all()).toEqual(['D', 'E', 'C', 'F']);
+    });
+
+    it('undoes a paste in a single step', () => {
+      setup(quarters('C', 'D'));
+      clickNode(0);
+      clickNode(1, { shiftKey: true });
+      ctrl('c');
+      ctrl('v');
+      expect(all().length).toBe(4);
+
+      ctrl('z');
+
+      expect(all()).toEqual(['C', 'D']);
+    });
+
+    it('ignores editor shortcuts typed into the tempo field', () => {
+      setup(quarters('C', 'D', 'E'));
+      clickNode(0);
+      const bpm = fixture.nativeElement.querySelector('.bpm-input') as HTMLInputElement;
+
+      bpm.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+      bpm.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }));
+
+      expect(all()).toEqual(['C', 'D', 'E']);
+      expect(noteInput.active()).toBeFalse();
     });
   });
 

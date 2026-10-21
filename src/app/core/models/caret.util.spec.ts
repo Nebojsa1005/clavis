@@ -10,6 +10,7 @@ import {
   nextCaret,
   normalizeCaret,
   positionAfterElement,
+  positionBeforeElement,
   previousCaret,
   snapTick,
 } from './caret.util';
@@ -233,5 +234,27 @@ describe('caret.util', () => {
     it('returns null for an unknown id', () => {
       expect(positionAfterElement(createEmptyScore(), 'nope')).toBeNull();
     });
+  });
+});
+
+describe('positionBeforeElement', () => {
+  it('points right before the element inside its measure', () => {
+    const first = createNote('C', 4, 'quarter');
+    const second = createNote('D', 4, 'quarter');
+    const score = scoreWithMeasures(createMeasure([first, second]));
+
+    expect(positionBeforeElement(score, first.id)).toEqual({ measureIndex: 0, voice: 0, tick: 0 });
+    expect(positionBeforeElement(score, second.id)).toEqual({ measureIndex: 0, voice: 0, tick: 64 });
+  });
+
+  it('finds elements in later measures', () => {
+    const target = createNote('G', 4, 'quarter');
+    const score = scoreWithMeasures(createMeasure([createNote('C', 4, 'whole')]), createMeasure([target]));
+
+    expect(positionBeforeElement(score, target.id)).toEqual({ measureIndex: 1, voice: 0, tick: 0 });
+  });
+
+  it('returns null for an unknown id', () => {
+    expect(positionBeforeElement(createEmptyScore(), 'nope')).toBeNull();
   });
 });

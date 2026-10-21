@@ -44,6 +44,20 @@ export class CaretService {
     }
   }
 
+  /** Inserts elements in order at the caret as one undo step; the caret ends after the last one. */
+  insertManyAtCaret(elements: readonly MeasureElement[]): void {
+    if (elements.length === 0) {
+      return;
+    }
+    const { measureIndex } = this.position();
+    this.scoreModel.insertElements(measureIndex, this.insertionIndex(), elements);
+
+    const after = positionAfterElement(this.scoreModel.score(), elements[elements.length - 1].id);
+    if (after) {
+      this.requested.set(after);
+    }
+  }
+
   moveLeft(): void {
     this.requested.set(previousCaret(this.scoreModel.score(), this.position()));
   }

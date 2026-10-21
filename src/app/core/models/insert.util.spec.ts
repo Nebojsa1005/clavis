@@ -1,11 +1,11 @@
-import { changeTimeSignature, insertWithReflow } from './insert.util';
-import { createEmptyScore, createMeasure, createNote, createRest, MeasureElement, Score } from './score.model';
+import { changeTimeSignature, insertManyWithReflow, insertWithReflow } from './insert.util';
+import { createEmptyScore, createMeasure, createNote, createRest, MeasureElement, Score, Step } from './score.model';
 
 function scoreOf(...measures: MeasureElement[][]): Score {
   return { ...createEmptyScore(), measures: measures.map((elements) => createMeasure(elements)) };
 }
 
-const quarters = (...steps: ('C' | 'D' | 'E' | 'F' | 'G')[]) => steps.map((step) => createNote(step, 4, 'quarter'));
+const quarters = (...steps: Step[]) => steps.map((step) => createNote(step, 4, 'quarter'));
 const stepsOf = (score: Score, measureIndex: number) =>
   score.measures[measureIndex].elements.map((el) => (el.kind === 'note' ? el.pitch.step : 'r'));
 
@@ -152,5 +152,40 @@ describe('changeTimeSignature', () => {
 
     expect(score.timeSignature).toEqual({ numerator: 4, denominator: 4 });
     expect(score.measures.length).toBe(1);
+  });
+});
+
+describe('insertManyWithReflow', () => {
+  it('inserts the elements in order at the given spot', () => {
+    const score = scoreOf(quarters('C', 'G'));
+
+    const result = insertManyWithReflow(score, 0, 1, quarters('D', 'E'));
+
+    expect(stepsOf(result, 0)).toEqual(['C', 'D', 'E', 'G']);
+  });
+
+  it('keeps the order even when the first inserted element is pushed into the next measure', () => {
+    const score = scoreOf(quarters('C', 'D', 'E', 'F'));
+
+    const result = insertManyWithReflow(score, 0, 4, quarters('G', 'C', 'D'));
+
+    expect(stepsOf(result, 0)).toEqual(['C', 'D', 'E', 'F']);
+    expect(stepsOf(result, 1)).toEqual(['G', 'C', 'D']);
+  });
+
+  it('cascades the displaced elements across measures', () => {
+    const score = scoreOf(quarters('C', 'D', 'E', 'F'), quarters('C', 'D', 'E', 'F'));
+
+    const result = insertManyWithReflow(score, 0, 0, quarters('G', 'G'));
+
+    expect(stepsOf(result, 0)).toEqual(['G', 'G', 'C', 'D']);
+    expect(stepsOf(result, 1)).toEqual(['E', 'F', 'C', 'D']);
+    expect(stepsOf(result, 2)).toEqual(['E', 'F']);
+  });
+
+  it('returns the score untouched for an empty list', () => {
+    const score = scoreOf(quarters('C'));
+
+    expect(insertManyWithReflow(score, 0, 0, [])).toBe(score);
   });
 });

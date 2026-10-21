@@ -325,6 +325,37 @@ describe('ExportService with several staves and instruments', () => {
     });
   });
 
+  describe('an orchestra-sized score', () => {
+    // piano (2 staves) + violin + viola + cello + flute = 6 staves in 5 instruments
+    const orchestra = () => {
+      const doc = piano();
+      for (const clef of ['treble', 'alto', 'bass', 'treble'] as const) {
+        const score = createEmptyScore(clef);
+        score.measures[0].elements.push(createNote('C', 4, 'quarter'));
+        doc.parts.push(createPart(`Deonica ${doc.parts.length + 1}`, [score]));
+      }
+      return doc;
+    };
+
+    it('writes a MusicXML part for every instrument', () => {
+      const xml = service.toMusicXml(orchestra());
+
+      expect(xml.match(/<part id="P\d+">/g)?.length).toBe(5);
+      expect(xml.match(/<score-part /g)?.length).toBe(5);
+      expect(xml).toContain('<clef><sign>C</sign><line>3</line></clef>');
+    });
+
+    it('writes a MIDI track for every staff', () => {
+      const bytes = service.toMidi(orchestra());
+
+      expect((bytes[10] << 8) | bytes[11]).toBe(6);
+    });
+
+    it('draws a stave for every staff', () => {
+      expect(service.toSvgString(orchestra()).match(/class="vf-stave"/g)?.length).toBe(6);
+    });
+  });
+
   it('draws every staff into the SVG', () => {
     const svg = service.toSvgString(piano());
 

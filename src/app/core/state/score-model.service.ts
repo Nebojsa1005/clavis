@@ -104,6 +104,58 @@ export class ScoreModelService {
     });
   }
 
+  /**
+   * Removes an instrument with all its staves. The last remaining instrument cannot be removed.
+   * If the active staff goes with it, the nearest remaining instrument becomes active.
+   */
+  removePart(partId: string): boolean {
+    const parts = this.documentState().parts;
+    const index = parts.findIndex((part) => part.id === partId);
+    if (index === -1 || parts.length < 2) {
+      return false;
+    }
+
+    const activeIsRemoved = parts[index].staves.some((staff) => staff.id === this.activeStaffId());
+    const neighbour = parts[index + 1] ?? parts[index - 1];
+    this.mutateDocument((doc) => ({ ...doc, parts: doc.parts.filter((part) => part.id !== partId) }));
+    if (activeIsRemoved) {
+      this.requestedStaffId.set(neighbour.staves[0].id);
+    }
+    return true;
+  }
+
+  /** Renames an instrument. A blank name is refused; the same name is not an edit. */
+  renamePart(partId: string, name: string): boolean {
+    const trimmed = name.trim();
+    const part = this.documentState().parts.find((candidate) => candidate.id === partId);
+    if (!part || trimmed === '') {
+      return false;
+    }
+    if (part.name !== trimmed) {
+      this.mutateDocument((doc) => ({
+        ...doc,
+        parts: doc.parts.map((candidate) => (candidate.id === partId ? { ...candidate, name: trimmed } : candidate)),
+      }));
+    }
+    return true;
+  }
+
+  /** Moves an instrument one place up (-1) or down (+1) in the score. False at either end. */
+  movePart(partId: string, direction: -1 | 1): boolean {
+    const parts = this.documentState().parts;
+    const from = parts.findIndex((part) => part.id === partId);
+    const to = from + direction;
+    if (from === -1 || to < 0 || to >= parts.length) {
+      return false;
+    }
+    this.mutateDocument((doc) => {
+      const reordered = [...doc.parts];
+      [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
+      return { ...doc, parts: reordered };
+    });
+    return true;
+  }
+
   /** Changes the clef. Notes keep their pitch; only how they are drawn and entered changes. */
   setClef(clef: Clef): void {
     if (clef === this.score().clef) {

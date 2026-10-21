@@ -1,9 +1,40 @@
 <section class="tracks" aria-label="Instrumenti">
   <h2>Instrumenti</h2>
   <ul class="parts">
-    @for (part of scoreModel.document().parts; track part.id) {
+    @for (part of scoreModel.document().parts; track part.id; let partIndex = $index; let first = $first; let last = $last) {
       <li class="part">
-        <span class="part__name">{{ part.name }}</span>
+        <div class="part__header">
+          @if (editingPartId() === part.id) {
+            <input
+              #renameInput
+              class="part__rename"
+              type="text"
+              maxlength="40"
+              aria-label="Naziv instrumenta"
+              [value]="part.name"
+              (keydown.enter)="commitRename(part, renameInput.value)"
+              (keydown.escape)="cancelRename()"
+              (blur)="commitRename(part, renameInput.value)"
+            />
+          } @else {
+            <span class="part__name" title="Dvoklik za promenu naziva" (dblclick)="startRename(part)">{{ part.name }}</span>
+            <span class="part__actions">
+              <button type="button" class="icon-btn" title="Preimenuj" aria-label="Preimenuj" (click)="startRename(part)">✎</button>
+              <button type="button" class="icon-btn" title="Pomeri gore" aria-label="Pomeri gore" [disabled]="first" (click)="onMove(part, -1)">▲</button>
+              <button type="button" class="icon-btn" title="Pomeri dole" aria-label="Pomeri dole" [disabled]="last" (click)="onMove(part, 1)">▼</button>
+              <button
+                type="button"
+                class="icon-btn"
+                title="Ukloni instrument"
+                aria-label="Ukloni instrument"
+                [disabled]="scoreModel.document().parts.length < 2"
+                (click)="onRemove(part)"
+              >
+                ✕
+              </button>
+            </span>
+          }
+        </div>
         <ul class="staves">
           @for (staff of part.staves; track staff.id; let index = $index) {
             <li>
@@ -22,5 +53,13 @@
       </li>
     }
   </ul>
-  <button type="button" class="add-btn" (click)="addPiano()">+ Klavir (grand staff)</button>
+
+  <div class="add">
+    <select #presetSelect class="add__select" aria-label="Instrument za dodavanje">
+      @for (preset of presets; track preset.id) {
+        <option [value]="preset.id">{{ preset.name }}</option>
+      }
+    </select>
+    <button type="button" class="add-btn" (click)="onAdd(presetSelect.value)">+ Dodaj</button>
+  </div>
 </section>

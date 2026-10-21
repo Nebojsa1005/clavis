@@ -752,4 +752,127 @@ describe('ScoreModelService', () => {
       expect(service.score()).toBe(empty);
     });
   });
+
+  describe('managing instruments', () => {
+    let trebleId: string;
+
+    beforeEach(() => {
+      service.replaceScore(createEmptyScore());
+      trebleId = service.activeStaffId();
+      service.addPart('piano');
+      service.addPart('violin');
+      service.setActiveStaff(trebleId);
+    });
+
+    const names = () => service.document().parts.map((p) => p.name);
+    const partId = (index: number) => service.document().parts[index].id;
+
+    describe('removePart', () => {
+      it('removes an instrument with all its staves', () => {
+        expect(service.removePart(partId(1))).toBeTrue();
+
+        expect(names()).toEqual(['Instrument', 'Violina']);
+        expect(allStaves(service.document()).length).toBe(2);
+      });
+
+      it('refuses to remove the last instrument', () => {
+        service.removePart(partId(2));
+        service.removePart(partId(1));
+
+        expect(service.removePart(partId(0))).toBeFalse();
+        expect(names()).toEqual(['Instrument']);
+      });
+
+      it('ignores an unknown id', () => {
+        expect(service.removePart('nope')).toBeFalse();
+        expect(names().length).toBe(3);
+      });
+
+      it('moves the active staff to the next instrument when its own instrument goes', () => {
+        service.setActiveStaff(service.document().parts[1].staves[1].id);
+
+        service.removePart(partId(1));
+
+        expect(service.activeStaffId()).toBe(service.document().parts[1].staves[0].id);
+        expect(service.document().parts[1].name).toBe('Violina');
+      });
+
+      it('falls back to the previous instrument when the last one is removed while active', () => {
+        service.setActiveStaff(service.document().parts[2].staves[0].id);
+
+        service.removePart(partId(2));
+
+        expect(service.activeStaffId()).toBe(service.document().parts[1].staves[0].id);
+      });
+
+      it('keeps the active staff when another instrument is removed', () => {
+        service.removePart(partId(2));
+
+        expect(service.activeStaffId()).toBe(trebleId);
+      });
+
+      it('is undoable', () => {
+        service.removePart(partId(1));
+
+        service.undo();
+
+        expect(names()).toEqual(['Instrument', 'Klavir', 'Violina']);
+      });
+    });
+
+    describe('renamePart', () => {
+      it('renames and trims', () => {
+        expect(service.renamePart(partId(1), '  Veliki klavir ')).toBeTrue();
+
+        expect(names()[1]).toBe('Veliki klavir');
+      });
+
+      it('refuses a blank name and an unknown id', () => {
+        expect(service.renamePart(partId(1), '   ')).toBeFalse();
+        expect(service.renamePart('nope', 'X')).toBeFalse();
+        expect(names()[1]).toBe('Klavir');
+      });
+
+      it('does not create an undo step when the name is unchanged', () => {
+        service.replaceDocument(service.document());
+
+        expect(service.renamePart(partId(1), 'Klavir')).toBeTrue();
+
+        expect(service.canUndo()).toBeFalse();
+      });
+
+      it('is undoable', () => {
+        service.renamePart(partId(1), 'Drugi');
+
+        service.undo();
+
+        expect(names()[1]).toBe('Klavir');
+      });
+    });
+
+    describe('movePart', () => {
+      it('moves an instrument down and up', () => {
+        expect(service.movePart(partId(0), 1)).toBeTrue();
+        expect(names()).toEqual(['Klavir', 'Instrument', 'Violina']);
+
+        expect(service.movePart(partId(2), -1)).toBeTrue();
+        expect(names()).toEqual(['Klavir', 'Violina', 'Instrument']);
+      });
+
+      it('refuses to move past either end', () => {
+        expect(service.movePart(partId(0), -1)).toBeFalse();
+        expect(service.movePart(partId(2), 1)).toBeFalse();
+        expect(service.movePart('nope', 1)).toBeFalse();
+        expect(names()).toEqual(['Instrument', 'Klavir', 'Violina']);
+      });
+
+      it('keeps the active staff and is undoable', () => {
+        service.movePart(partId(0), 1);
+        expect(service.activeStaffId()).toBe(trebleId);
+
+        service.undo();
+        expect(names()).toEqual(['Instrument', 'Klavir', 'Violina']);
+      });
+    });
+  });
 });

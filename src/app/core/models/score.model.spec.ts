@@ -1,4 +1,4 @@
-import { CLEFS, createEmptyScore, isScore } from './score.model';
+import { CLEFS, createEmptyScore, createNote, createRest, isScore } from './score.model';
 
 describe('isScore', () => {
   it('accepts a well-formed score', () => {
@@ -42,5 +42,17 @@ describe('isScore', () => {
 
   it('rejects a non-array measures field', () => {
     expect(isScore({ ...createEmptyScore(), measures: 'C4' })).toBe(false);
+  });
+});
+
+describe('createNote / createRest', () => {
+  it('leaves the dotted flag out unless requested', () => {
+    expect('dotted' in createNote('C', 4, 'quarter')).toBeFalse();
+    expect('dotted' in createRest('quarter')).toBeFalse();
+  });
+
+  it('sets the dotted flag when requested', () => {
+    expect(createNote('C', 4, 'quarter', null, true).dotted).toBeTrue();
+    expect(createRest('half', true).dotted).toBeTrue();
   });
 });

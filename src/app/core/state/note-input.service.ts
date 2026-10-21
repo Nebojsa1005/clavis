@@ -12,6 +12,7 @@ export class NoteInputService {
 
   readonly active = signal(false);
   readonly currentDuration = signal<NoteDuration>('quarter');
+  readonly dotted = signal(false);
 
   toggle(): void {
     this.active.update((value) => !value);
@@ -25,20 +26,24 @@ export class NoteInputService {
     this.currentDuration.set(duration);
   }
 
+  toggleDotted(): void {
+    this.dotted.update((value) => !value);
+  }
+
   /** Inserts a note at the caret; y is in SVG px (the same for every measure, they share one row). */
   enterPitchFromClick(clef: Clef, y: number, topLineY: number, halfStepPx: number): void {
     if (!this.active()) {
       return;
     }
     const pitch = pitchFromClickY(clef, y, topLineY, halfStepPx);
-    this.caret.insertAtCaret(createNote(pitch.step, pitch.octave, this.currentDuration()));
+    this.caret.insertAtCaret(createNote(pitch.step, pitch.octave, this.currentDuration(), null, this.dotted()));
   }
 
   enterRest(): void {
     if (!this.active()) {
       return;
     }
-    this.caret.insertAtCaret(createRest(this.currentDuration()));
+    this.caret.insertAtCaret(createRest(this.currentDuration(), this.dotted()));
   }
 
   /** Moves the pitch of the note just before the caret by one diatonic step. */

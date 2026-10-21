@@ -33,8 +33,8 @@ export class ScoreModelService {
     this.mutate((score) => {
       const measures = score.measures.map((measure) => ({ ...measure, elements: [...measure.elements] }));
       const last = measures[measures.length - 1];
-      const usedBeats = last.elements.reduce((sum, el) => sum + durationToBeats(el.duration, score.timeSignature), 0);
-      const elementBeats = durationToBeats(element.duration, score.timeSignature);
+      const usedBeats = last.elements.reduce((sum, el) => sum + durationToBeats(el.duration, score.timeSignature, el.dotted), 0);
+      const elementBeats = durationToBeats(element.duration, score.timeSignature, element.dotted);
 
       if (usedBeats + elementBeats <= score.timeSignature.numerator + 1e-6) {
         last.elements.push(element);

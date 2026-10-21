@@ -45,6 +45,17 @@ describe('ScoreModelService', () => {
       expect(measures[1].elements.length).toBe(1);
     });
 
+    it('counts the dot when deciding whether an element still fits', () => {
+      service.replaceScore(createEmptyScore());
+      service.appendElement(createNote('C', 4, 'half', null, true));
+
+      service.appendElement(createNote('D', 4, 'quarter'));
+      service.appendElement(createNote('E', 4, 'half'));
+
+      const lengths = service.score().measures.map((m) => m.elements.length);
+      expect(lengths).toEqual([2, 1]);
+    });
+
     it('appends rests too', () => {
       service.replaceScore(createEmptyScore());
       service.appendElement(createRest('quarter'));

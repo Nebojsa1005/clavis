@@ -1,3 +1,4 @@
+import { durationToTicks, TICKS_PER_WHOLE } from './caret.util';
 import { effectiveAccidental } from './key-signature.util';
 import { Clef, NoteDuration, NotePitch, Score, Step, TimeSignature } from './score.model';
 
@@ -18,16 +19,9 @@ export function stepDiatonic(step: Step, octave: number, delta: number): { step:
   return { step: DIATONIC_ORDER[index], octave: nextOctave };
 }
 
-const DURATION_FRACTION_OF_WHOLE: Record<NoteDuration, number> = {
-  whole: 1,
-  half: 1 / 2,
-  quarter: 1 / 4,
-  eighth: 1 / 8,
-  sixteenth: 1 / 16,
-};
-
-export function durationToBeats(duration: NoteDuration, timeSignature: TimeSignature): number {
-  return DURATION_FRACTION_OF_WHOLE[duration] * timeSignature.denominator;
+/** Length in beats, where a beat is the note value given by the time signature's denominator. */
+export function durationToBeats(duration: NoteDuration, timeSignature: TimeSignature, dotted = false): number {
+  return (durationToTicks(duration, dotted) / TICKS_PER_WHOLE) * timeSignature.denominator;
 }
 
 const TOP_LINE_PITCH: Record<Clef, { step: Step; octave: number }> = {
@@ -88,7 +82,7 @@ export function buildPlaybackSchedule(score: Score, bpm: number): PlaybackSchedu
 
   for (const measure of score.measures) {
     for (const element of measure.elements) {
-      const durationSeconds = durationToBeats(element.duration, score.timeSignature) * beatSeconds;
+      const durationSeconds = durationToBeats(element.duration, score.timeSignature, element.dotted) * beatSeconds;
       if (element.kind === 'note') {
         notes.push({ offsetSeconds: elapsed, durationSeconds, noteName: toToneNoteName(element.pitch, score.keySignature) });
       }

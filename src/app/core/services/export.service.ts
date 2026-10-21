@@ -1,21 +1,14 @@
 import { Injectable, inject } from '@angular/core';
 import MidiWriter from 'midi-writer-js';
+import { elementTicks, TICKS_PER_WHOLE } from '../models/caret.util';
 import { effectiveAccidental, findKeySignature } from '../models/key-signature.util';
 import { toToneNoteName } from '../models/notation.util';
 import { AccidentalValue, Measure, MeasureElement, NoteDuration, Score } from '../models/score.model';
 import { triggerDownload } from '../utils/download.util';
 import { NotationRendererService } from './notation-renderer.service';
 
-/** XML-ski broj "divisions" po četvrtinki; mora deliti sve naše trajanja na cele brojeve. */
-const MUSICXML_DIVISIONS = 4;
-
-const MUSICXML_DURATION_UNITS: Record<NoteDuration, number> = {
-  whole: 16,
-  half: 8,
-  quarter: 4,
-  eighth: 2,
-  sixteenth: 1,
-};
+/** MusicXML "divisions" per quarter note; 32 keeps even a dotted 64th (3 divisions) an integer. */
+const MUSICXML_DIVISIONS = 32;
 
 const MUSICXML_TYPE: Record<NoteDuration, string> = {
   whole: 'whole',
@@ -23,6 +16,8 @@ const MUSICXML_TYPE: Record<NoteDuration, string> = {
   quarter: 'quarter',
   eighth: 'eighth',
   sixteenth: '16th',
+  thirtysecond: '32nd',
+  sixtyfourth: '64th',
 };
 
 const MUSICXML_CLEF: Record<Score['clef'], { sign: string; line: number }> = {
@@ -45,6 +40,8 @@ const MIDI_DURATION_TOKEN: Record<NoteDuration, string> = {
   quarter: '4',
   eighth: '8',
   sixteenth: '16',
+  thirtysecond: '32',
+  sixtyfourth: '64',
 };
 
 /**
@@ -85,7 +82,8 @@ export class ExportService {
     let pendingWait: string[] = [];
     for (const measure of score.measures) {
       for (const element of measure.elements) {
-        const token = MIDI_DURATION_TOKEN[element.duration];
+        // midi-writer-js marks a dotted duration with a leading "d" ("d4" = dotted quarter).
+        const token = (element.dotted ? 'd' : '') + MIDI_DURATION_TOKEN[element.duration];
         if (element.kind === 'rest') {
           pendingWait.push(token);
           continue;
@@ -172,11 +170,12 @@ export class ExportService {
   }
 
   private elementToXml(element: MeasureElement, keySignature: string): string {
-    const duration = MUSICXML_DURATION_UNITS[element.duration];
+    const duration = (elementTicks(element) * MUSICXML_DIVISIONS * 4) / TICKS_PER_WHOLE;
     const type = MUSICXML_TYPE[element.duration];
+    const dotXml = element.dotted ? '\n        <dot/>' : '';
 
     if (element.kind === 'rest') {
-      return `      <note>\n        <rest/>\n        <duration>${duration}</duration>\n        <type>${type}</type>\n      </note>`;
+      return `      <note>\n        <rest/>\n        <duration>${duration}</duration>\n        <type>${type}</type>${dotXml}\n      </note>`;
     }
 
     // <alter> is the sounding alteration (key signature included); <accidental> only what is written.
@@ -194,7 +193,7 @@ export class ExportService {
       `          <octave>${element.pitch.octave}</octave>`,
       '        </pitch>',
       `        <duration>${duration}</duration>`,
-      `        <type>${type}</type>${accidentalXml}`,
+      `        <type>${type}</type>${dotXml}${accidentalXml}`,
       '      </note>',
     ].join('\n');
   }

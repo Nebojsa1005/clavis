@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { KEY_SIGNATURE_OPTIONS } from '../models/key-signature.util';
-import { CLEFS, createEmptyScore, createMeasure, createNote } from '../models/score.model';
+import { CLEFS, createEmptyScore, createMeasure, createNote, createRest } from '../models/score.model';
 import { NotationRendererService, CARET_CLASS, SCORE_ELEMENT_ID_ATTR } from './notation-renderer.service';
 
 describe('NotationRendererService', () => {
@@ -48,6 +48,31 @@ describe('NotationRendererService', () => {
 
       expect(container.querySelectorAll('.vf-stavenote').length).withContext(option.value).toBe(1);
     }
+  });
+
+  it('draws an extra element (the augmentation dot) for each dotted note and rest', () => {
+    // VexFlow gives the dot no class of its own, so compare what is drawn inside the note groups.
+    const drawnPerNote = (dotted: boolean) => {
+      const score = createEmptyScore();
+      score.measures[0].elements.push(createNote('C', 4, 'quarter', null, dotted), createRest('quarter', dotted));
+      service.render(container, score);
+      return Array.from(container.querySelectorAll('.vf-stavenote')).map((el) => el.querySelectorAll('*').length);
+    };
+
+    const plain = drawnPerNote(false);
+    const dotted = drawnPerNote(true);
+
+    expect(dotted[0]).toBeGreaterThan(plain[0]);
+    expect(dotted[1]).toBeGreaterThan(plain[1]);
+  });
+
+  it('renders 32nd and 64th notes', () => {
+    const score = createEmptyScore();
+    score.measures[0].elements.push(createNote('C', 4, 'thirtysecond'), createNote('D', 4, 'sixtyfourth'));
+
+    service.render(container, score);
+
+    expect(container.querySelectorAll('.vf-stavenote').length).toBe(2);
   });
 
   it('clears previous render before drawing again', () => {

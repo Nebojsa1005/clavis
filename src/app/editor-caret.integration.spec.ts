@@ -180,6 +180,28 @@ describe('Caret editing (integration)', () => {
       expect(caret.position().tick).toBe(192);
     });
 
+    it('inserts a dotted element and advances the caret by its dotted length', () => {
+      setup(quarters('C', 'D'));
+      press('n');
+
+      press('.');
+      press(' ');
+
+      expect(scoreModel.score().measures[0].elements[0].dotted).toBeTrue();
+      expect(caret.position().tick).toBe(96);
+    });
+
+    it('inserts a 64th note with key 7', () => {
+      setup(quarters('C', 'D'));
+      press('n');
+
+      press('7');
+      press(' ');
+
+      expect(scoreModel.score().measures[0].elements[0].duration).toBe('sixtyfourth');
+      expect(caret.position().tick).toBe(4);
+    });
+
     it('is undone in one step and the caret stays on a valid stop', () => {
       setup(quarters('C', 'D'));
       press('n');

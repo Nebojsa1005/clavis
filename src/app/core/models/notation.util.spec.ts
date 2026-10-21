@@ -24,6 +24,21 @@ describe('durationToBeats', () => {
     expect(durationToBeats('whole', fourFour)).toBe(4);
     expect(durationToBeats('eighth', fourFour)).toBe(0.5);
   });
+
+  it('computes beats for 32nd and 64th notes', () => {
+    expect(durationToBeats('thirtysecond', fourFour)).toBe(0.125);
+    expect(durationToBeats('sixtyfourth', fourFour)).toBe(0.0625);
+  });
+
+  it('adds half the length for dotted durations', () => {
+    expect(durationToBeats('quarter', fourFour, true)).toBe(1.5);
+    expect(durationToBeats('half', fourFour, true)).toBe(3);
+  });
+
+  it('measures beats in the denominator note value', () => {
+    expect(durationToBeats('eighth', { numerator: 6, denominator: 8 })).toBe(1);
+    expect(durationToBeats('quarter', { numerator: 6, denominator: 8 }, true)).toBe(3);
+  });
 });
 
 describe('pitchFromClickY', () => {
@@ -133,5 +148,17 @@ describe('buildPlaybackSchedule with a key signature', () => {
     const names = buildPlaybackSchedule(score, 120).notes.map((n) => n.noteName);
 
     expect(names).toEqual(['F#4', 'C4']);
+  });
+});
+
+describe('buildPlaybackSchedule with dotted notes', () => {
+  it('plays a dotted quarter for 0.75s at 120 BPM and shifts the next note', () => {
+    const score = createEmptyScore();
+    score.measures[0].elements.push(createNote('C', 4, 'quarter', null, true), createNote('D', 4, 'eighth'));
+
+    const [first, second] = buildPlaybackSchedule(score, 120).notes;
+
+    expect(first.durationSeconds).toBeCloseTo(0.75);
+    expect(second.offsetSeconds).toBeCloseTo(0.75);
   });
 });

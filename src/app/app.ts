@@ -28,6 +28,8 @@ const KEY_DURATION_MAP: Record<string, NoteDuration> = {
   '3': 'quarter',
   '4': 'eighth',
   '5': 'sixteenth',
+  '6': 'thirtysecond',
+  '7': 'sixtyfourth',
 };
 
 @Component({
@@ -53,6 +55,8 @@ export class App {
     { value: 'quarter', key: '3', label: 'Četvrtina' },
     { value: 'eighth', key: '4', label: 'Osminka' },
     { value: 'sixteenth', key: '5', label: 'Šesnaestinka' },
+    { value: 'thirtysecond', key: '6', label: 'Tridesetdvojina' },
+    { value: 'sixtyfourth', key: '7', label: 'Šezdesetčetvrtina' },
   ];
 
   protected readonly clefOptions: ClefOption[] = [
@@ -79,6 +83,10 @@ export class App {
 
   protected onSelectDuration(duration: NoteDuration): void {
     this.noteInput.setDuration(duration);
+  }
+
+  protected onToggleDotted(): void {
+    this.noteInput.toggleDotted();
   }
 
   protected onClefChange(event: Event): void {
@@ -211,6 +219,10 @@ export class App {
         break;
       case 'ArrowRight':
         this.caret.moveRight();
+        event.preventDefault();
+        break;
+      case '.':
+        this.noteInput.toggleDotted();
         event.preventDefault();
         break;
       case 'ArrowUp':

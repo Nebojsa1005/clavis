@@ -2,6 +2,7 @@ import {
   CARET_START,
   durationToTicks,
   elementBoundaries,
+  elementTicks,
   endOfScore,
   caretStops,
   insertionIndex,
@@ -29,6 +30,19 @@ describe('caret.util', () => {
     expect(durationToTicks('whole')).toBe(256);
     expect(durationToTicks('quarter')).toBe(64);
     expect(durationToTicks('sixteenth')).toBe(16);
+    expect(durationToTicks('thirtysecond')).toBe(8);
+    expect(durationToTicks('sixtyfourth')).toBe(4);
+  });
+
+  it('lengthens dotted durations by half, staying on whole ticks down to a 64th', () => {
+    expect(durationToTicks('quarter', true)).toBe(96);
+    expect(durationToTicks('half', true)).toBe(192);
+    expect(durationToTicks('sixtyfourth', true)).toBe(6);
+  });
+
+  it('reads the dot from the element', () => {
+    expect(elementTicks(createNote('C', 4, 'quarter', null, true))).toBe(96);
+    expect(elementTicks(createRest('eighth'))).toBe(32);
   });
 
   it('computes measure capacity for different time signatures', () => {
@@ -44,6 +58,12 @@ describe('caret.util', () => {
 
     it('lists the start of every element plus the end', () => {
       expect(elementBoundaries(halfPlusQuarters)).toEqual([0, 128, 192, 256]);
+    });
+
+    it('accounts for dotted elements', () => {
+      const measure = createMeasure([createNote('C', 4, 'half', null, true), createRest('quarter')]);
+
+      expect(elementBoundaries(measure)).toEqual([0, 192, 256]);
     });
   });
 

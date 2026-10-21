@@ -1,8 +1,8 @@
-import { durationToTicks, measureCapacityTicks } from './caret.util';
+import { elementTicks, measureCapacityTicks } from './caret.util';
 import { createMeasure, Measure, MeasureElement, Score, TimeSignature } from './score.model';
 
 function totalTicks(elements: MeasureElement[]): number {
-  return elements.reduce((sum, element) => sum + durationToTicks(element.duration), 0);
+  return elements.reduce((sum, element) => sum + elementTicks(element), 0);
 }
 
 /** Removes trailing elements until the rest fits in `capacity`; always leaves at least one element. */
@@ -11,7 +11,7 @@ function takeOverflow(elements: MeasureElement[], capacity: number): MeasureElem
   let total = totalTicks(elements);
   while (total > capacity && elements.length > 1) {
     const last = elements.pop()!;
-    total -= durationToTicks(last.duration);
+    total -= elementTicks(last);
     overflow.unshift(last);
   }
   return overflow;

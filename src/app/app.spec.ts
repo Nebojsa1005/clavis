@@ -53,6 +53,24 @@ describe('App', () => {
       expect(caret.position().tick).toBe(64);
     });
 
+    it('selects 32nd and 64th durations with keys 6 and 7', () => {
+      noteInput.setActive(true);
+
+      press('6');
+      expect(noteInput.currentDuration()).toBe('thirtysecond');
+      press('7');
+      expect(noteInput.currentDuration()).toBe('sixtyfourth');
+    });
+
+    it('toggles the dot with the period key', () => {
+      noteInput.setActive(true);
+
+      press('.');
+      expect(noteInput.dotted()).toBeTrue();
+      press('.');
+      expect(noteInput.dotted()).toBeFalse();
+    });
+
     it('ignores arrow keys while note input mode is off', () => {
       noteInput.setActive(false);
 

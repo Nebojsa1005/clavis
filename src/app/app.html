@@ -96,6 +96,16 @@
           {{ option.key }}
         </button>
       }
+      <button
+        type="button"
+        class="duration-btn"
+        [class.active]="noteInput.dotted()"
+        [attr.aria-pressed]="noteInput.dotted()"
+        title="Tačka (.)"
+        (click)="onToggleDotted()"
+      >
+        •
+      </button>
     </div>
 
     <div class="staff-area">

@@ -71,6 +71,15 @@ describe('insertWithReflow', () => {
     expect(stepsOf(result, 1)).toEqual(['r']);
   });
 
+  it('counts the dot when deciding what overflows', () => {
+    const score = scoreOf([createNote('C', 4, 'half', null, true), createNote('D', 4, 'quarter')]);
+
+    const result = insertWithReflow(score, 0, 0, createNote('E', 4, 'quarter'));
+
+    expect(stepsOf(result, 0)).toEqual(['E', 'C']);
+    expect(stepsOf(result, 1)).toEqual(['D']);
+  });
+
   it('does not mutate the input score', () => {
     const score = scoreOf(quarters('C', 'D', 'E', 'F'));
 

@@ -9,7 +9,14 @@ export type Step = 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B';
 
 export type AccidentalValue = 'sharp' | 'flat' | 'natural' | null;
 
-export type NoteDuration = 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth';
+export type NoteDuration =
+  | 'whole'
+  | 'half'
+  | 'quarter'
+  | 'eighth'
+  | 'sixteenth'
+  | 'thirtysecond'
+  | 'sixtyfourth';
 
 export interface NotePitch {
   step: Step;
@@ -22,6 +29,8 @@ export interface Note {
   kind: 'note';
   pitch: NotePitch;
   duration: NoteDuration;
+  /** Single augmentation dot: lengthens the note by half. */
+  dotted?: boolean;
   tieToNext?: boolean;
 }
 
@@ -29,6 +38,7 @@ export interface Rest {
   readonly id: string;
   kind: 'rest';
   duration: NoteDuration;
+  dotted?: boolean;
 }
 
 export type MeasureElement = Note | Rest;
@@ -59,12 +69,19 @@ export function createNote(
   octave: number,
   duration: NoteDuration,
   accidental: AccidentalValue = null,
+  dotted = false,
 ): Note {
-  return { id: createId(), kind: 'note', pitch: { step, octave, accidental }, duration };
+  return {
+    id: createId(),
+    kind: 'note',
+    pitch: { step, octave, accidental },
+    duration,
+    ...(dotted ? { dotted: true } : {}),
+  };
 }
 
-export function createRest(duration: NoteDuration): Rest {
-  return { id: createId(), kind: 'rest', duration };
+export function createRest(duration: NoteDuration, dotted = false): Rest {
+  return { id: createId(), kind: 'rest', duration, ...(dotted ? { dotted: true } : {}) };
 }
 
 export function createMeasure(elements: MeasureElement[]): Measure {

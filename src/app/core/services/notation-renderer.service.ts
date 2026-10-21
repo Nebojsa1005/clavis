@@ -78,6 +78,28 @@ export class NotationRendererService {
     return index === -1 ? null : (measure.stopXs[index] ?? null);
   }
 
+  /**
+   * Maps an x coordinate (SVG px, relative to the rendered score) to the nearest caret position.
+   * Clicks left of / right of the score resolve to the first / last measure.
+   */
+  caretFromX(x: number): CaretPosition | null {
+    if (this.layout.length === 0) {
+      return null;
+    }
+
+    const found = this.layout.findIndex((measure) => x < measure.endX);
+    const measureIndex = found === -1 ? this.layout.length - 1 : found;
+    const { stopXs, ticks } = this.layout[measureIndex];
+
+    let nearest = 0;
+    stopXs.forEach((stopX, index) => {
+      if (Math.abs(stopX - x) < Math.abs(stopXs[nearest] - x)) {
+        nearest = index;
+      }
+    });
+    return { measureIndex, voice: 0, tick: ticks[nearest] };
+  }
+
   render(
     container: HTMLDivElement,
     score: Score,

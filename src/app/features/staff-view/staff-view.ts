@@ -48,6 +48,10 @@ export class StaffView {
     }
     const rect = host.getBoundingClientRect();
     const y = event.clientY - rect.top;
+    const position = this.notationRenderer.caretFromX(event.clientX - rect.left);
+    if (position) {
+      this.caretService.setPosition(position);
+    }
     const geometry = this.notationRenderer.getStaffGeometry();
     this.noteInput.enterPitchFromClick(this.scoreModel.score().clef, y, geometry.topLineY, geometry.halfStepPx);
   }

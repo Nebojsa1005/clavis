@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { createEmptyScore, createNote } from '../../core/models/score.model';
+import { createEmptyScore, createMeasure, createNote } from '../../core/models/score.model';
 import { NotationRendererService } from '../../core/services/notation-renderer.service';
+import { CaretService } from '../../core/state/caret.service';
 import { NoteInputService } from '../../core/state/note-input.service';
 import { ScoreModelService } from '../../core/state/score-model.service';
 import { SelectionService } from '../../core/state/selection.service';
@@ -10,6 +11,7 @@ describe('StaffView', () => {
   let scoreModel: ScoreModelService;
   let selection: SelectionService;
   let noteInput: NoteInputService;
+  let caret: CaretService;
   let renderSpy: jasmine.Spy;
 
   beforeEach(async () => {
@@ -18,6 +20,7 @@ describe('StaffView', () => {
     scoreModel = TestBed.inject(ScoreModelService);
     selection = TestBed.inject(SelectionService);
     noteInput = TestBed.inject(NoteInputService);
+    caret = TestBed.inject(CaretService);
     renderSpy = spyOn(TestBed.inject(NotationRendererService), 'render');
 
     scoreModel.replaceScore(createEmptyScore());
@@ -75,7 +78,7 @@ describe('StaffView', () => {
     fixture.detectChanges();
 
     const host = fixture.nativeElement.querySelector('.staff-canvas') as HTMLDivElement;
-    spyOn(host, 'getBoundingClientRect').and.returnValue({ top: 0 } as DOMRect);
+    spyOn(host, 'getBoundingClientRect').and.returnValue({ top: 0, left: 0 } as DOMRect);
 
     host.dispatchEvent(new MouseEvent('click', { bubbles: true, clientY: 80 }));
 
@@ -99,5 +102,30 @@ describe('StaffView', () => {
     fixture.detectChanges();
 
     expect(renderSpy.calls.mostRecent().args[3]).toEqual({ measureIndex: 0, voice: 0, tick: 0 });
+  });
+
+  it('moves the caret to the clicked position when note input is active', () => {
+    noteInput.setActive(true);
+    scoreModel.replaceScore({
+      ...createEmptyScore(),
+      measures: [
+        createMeasure([createNote('C', 4, 'quarter'), createNote('D', 4, 'quarter')]),
+        createMeasure([createNote('E', 4, 'quarter')]),
+      ],
+    });
+    const fixture = TestBed.createComponent(StaffView);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement.querySelector('.staff-canvas') as HTMLDivElement;
+    spyOn(host, 'getBoundingClientRect').and.returnValue({ top: 0, left: 0 } as DOMRect);
+    spyOn(TestBed.inject(NotationRendererService), 'caretFromX').and.returnValue({
+      measureIndex: 1,
+      voice: 0,
+      tick: 0,
+    });
+
+    host.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 300, clientY: 80 }));
+
+    expect(caret.position()).toEqual({ measureIndex: 1, voice: 0, tick: 0 });
   });
 });

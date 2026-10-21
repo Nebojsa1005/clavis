@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { createEmptyScore, createNote } from '../models/score.model';
+import { createEmptyScore, createMeasure, createNote } from '../models/score.model';
 import { NotationRendererService, CARET_CLASS, SCORE_ELEMENT_ID_ATTR } from './notation-renderer.service';
 
 describe('NotationRendererService', () => {
@@ -118,6 +118,51 @@ describe('NotationRendererService', () => {
 
       expect(service.getCaretX({ measureIndex: 5, voice: 0, tick: 0 })).toBeNull();
       expect(service.getCaretX({ measureIndex: 0, voice: 0, tick: 17 })).toBeNull();
+    });
+  });
+
+  describe('caretFromX', () => {
+    function twoMeasureScore() {
+      const score = createEmptyScore();
+      for (let i = 0; i < 4; i++) {
+        score.measures[0].elements.push(createNote('C', 4, 'quarter'));
+      }
+      score.measures.push(createMeasure([createNote('D', 4, 'half')]));
+      return score;
+    }
+
+    it('returns null before anything was rendered', () => {
+      expect(service.caretFromX(100)).toBeNull();
+    });
+
+    it('resolves an x on a caret stop to that stop', () => {
+      service.render(container, twoMeasureScore());
+      const x = service.getCaretX({ measureIndex: 0, voice: 0, tick: 128 })!;
+
+      expect(service.caretFromX(x)).toEqual({ measureIndex: 0, voice: 0, tick: 128 });
+    });
+
+    it('resolves an x between two stops to the nearer one', () => {
+      service.render(container, twoMeasureScore());
+      const a = service.getCaretX({ measureIndex: 0, voice: 0, tick: 64 })!;
+      const b = service.getCaretX({ measureIndex: 0, voice: 0, tick: 128 })!;
+
+      expect(service.caretFromX(a + (b - a) * 0.25)!.tick).toBe(64);
+      expect(service.caretFromX(a + (b - a) * 0.75)!.tick).toBe(128);
+    });
+
+    it('picks the measure under the x coordinate', () => {
+      service.render(container, twoMeasureScore());
+      const x = service.getCaretX({ measureIndex: 1, voice: 0, tick: 0 })!;
+
+      expect(service.caretFromX(x)!.measureIndex).toBe(1);
+    });
+
+    it('clamps clicks outside the score to the first and last measure', () => {
+      service.render(container, twoMeasureScore());
+
+      expect(service.caretFromX(-50)!.measureIndex).toBe(0);
+      expect(service.caretFromX(99999)).toEqual({ measureIndex: 1, voice: 0, tick: 128 });
     });
   });
 });

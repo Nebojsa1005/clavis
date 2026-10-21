@@ -1,6 +1,6 @@
 import { Measure, NoteDuration, Score, TimeSignature } from './score.model';
 
-/** Rezolucija pozicije u taktu: 256 tikova po celoj noti (dovoljno za 64-inku i tačkicu). */
+/** Position resolution inside a measure: 256 ticks per whole note (enough for a dotted 64th). */
 export const TICKS_PER_WHOLE = 256;
 
 const DURATION_TICKS: Record<NoteDuration, number> = {
@@ -11,7 +11,7 @@ const DURATION_TICKS: Record<NoteDuration, number> = {
   sixteenth: TICKS_PER_WHOLE / 16,
 };
 
-/** Pozicija kursora: takt, glas i tik unutar takta (0 = početak takta). */
+/** Caret position: measure, voice and tick inside the measure (0 = start of the measure). */
 export interface CaretPosition {
   measureIndex: number;
   voice: number;
@@ -28,7 +28,7 @@ export function measureCapacityTicks(timeSignature: TimeSignature): number {
   return (timeSignature.numerator * TICKS_PER_WHOLE) / timeSignature.denominator;
 }
 
-/** Tikovi na kojima kursor može da stoji u taktu: početak svakog elementa + kraj poslednjeg. */
+/** Ticks where the caret may sit in a measure: the start of every element plus the end of the last. */
 export function elementBoundaries(measure: Measure): number[] {
   const boundaries = [0];
   let elapsed = 0;
@@ -39,7 +39,7 @@ export function elementBoundaries(measure: Measure): number[] {
   return boundaries;
 }
 
-/** Najbliža dozvoljena granica; kod izjednačenja pobeđuje ranija. */
+/** Nearest allowed boundary; the earlier one wins on a tie. */
 export function snapTick(measure: Measure, tick: number): number {
   const boundaries = elementBoundaries(measure);
   return boundaries.reduce((best, boundary) =>
@@ -47,7 +47,7 @@ export function snapTick(measure: Measure, tick: number): number {
   );
 }
 
-/** Vraća važeću poziciju: takt u opsegu, glas 0 (za sada jedan glas), tik prilepljen na granicu elementa. */
+/** Returns a valid position: measure in range, voice 0 (single voice for now), tick snapped to an element boundary. */
 export function normalizeCaret(score: Score, caret: CaretPosition): CaretPosition {
   const lastIndex = Math.max(score.measures.length - 1, 0);
   const measureIndex = Math.min(Math.max(Math.trunc(caret.measureIndex), 0), lastIndex);
@@ -55,7 +55,7 @@ export function normalizeCaret(score: Score, caret: CaretPosition): CaretPositio
   return { measureIndex, voice: 0, tick: measure ? snapTick(measure, caret.tick) : 0 };
 }
 
-/** Pozicija iza poslednjeg elementa partiture. */
+/** Position after the last element of the score. */
 export function endOfScore(score: Score): CaretPosition {
   const measureIndex = Math.max(score.measures.length - 1, 0);
   const measure = score.measures[measureIndex];
@@ -63,7 +63,7 @@ export function endOfScore(score: Score): CaretPosition {
   return { measureIndex, voice: 0, tick };
 }
 
-/** Indeks u `measure.elements` ispred kog bi se umetnuo novi element (== broj elemenata pre kursora). */
+/** Index in `measure.elements` that a new element would be inserted before (== number of elements before the caret). */
 export function insertionIndex(measure: Measure, tick: number): number {
   return elementBoundaries(measure).indexOf(snapTick(measure, tick));
 }

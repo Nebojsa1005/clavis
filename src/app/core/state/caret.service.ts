@@ -9,8 +9,8 @@ import {
 import { ScoreModelService } from './score-model.service';
 
 /**
- * Pozicija kursora za unos nota. Čuva "željenu" poziciju, a `position` je uvek važeća za trenutnu
- * partituru (npr. posle brisanja ili undo-a kursor se sam prilepi na najbližu granicu).
+ * Caret position for note entry. Stores the requested position, while `position` is always valid
+ * for the current score (e.g. after a delete or undo the caret snaps to the nearest boundary).
  */
 @Injectable({ providedIn: 'root' })
 export class CaretService {
@@ -19,7 +19,7 @@ export class CaretService {
 
   readonly position = computed(() => normalizeCaret(this.scoreModel.score(), this.requested()));
 
-  /** Indeks elementa u trenutnom taktu ispred kog se umeće. */
+  /** Index in the current measure of the element a new one would be inserted before. */
   readonly insertionIndex = computed(() => {
     const { measureIndex, tick } = this.position();
     return insertionIndex(this.scoreModel.score().measures[measureIndex], tick);

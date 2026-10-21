@@ -1,0 +1,12 @@
+.staff-canvas {
+  width: 100%;
+  min-height: 240px;
+
+  svg {
+    display: block;
+  }
+
+  &.input-active {
+    cursor: crosshair;
+  }
+}

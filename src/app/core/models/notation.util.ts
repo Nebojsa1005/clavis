@@ -1,0 +1,96 @@
+import { Clef, NoteDuration, NotePitch, Score, Step, TimeSignature } from './score.model';
+
+const DIATONIC_ORDER: Step[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+
+/** Pomera prirodnu (bez predznaka) notu `delta` dijatonskih koraka gore/dole. */
+export function stepDiatonic(step: Step, octave: number, delta: number): { step: Step; octave: number } {
+  let index = DIATONIC_ORDER.indexOf(step) + delta;
+  let nextOctave = octave;
+  while (index < 0) {
+    index += 7;
+    nextOctave -= 1;
+  }
+  while (index >= 7) {
+    index -= 7;
+    nextOctave += 1;
+  }
+  return { step: DIATONIC_ORDER[index], octave: nextOctave };
+}
+
+const DURATION_FRACTION_OF_WHOLE: Record<NoteDuration, number> = {
+  whole: 1,
+  half: 1 / 2,
+  quarter: 1 / 4,
+  eighth: 1 / 8,
+  sixteenth: 1 / 16,
+};
+
+export function durationToBeats(duration: NoteDuration, timeSignature: TimeSignature): number {
+  return DURATION_FRACTION_OF_WHOLE[duration] * timeSignature.denominator;
+}
+
+const TOP_LINE_PITCH: Record<Clef, { step: Step; octave: number }> = {
+  treble: { step: 'F', octave: 5 },
+  bass: { step: 'A', octave: 3 },
+};
+
+/**
+ * Mapira y koordinatu klika (SVG px, ista za sve taktove jer su na istom redu)
+ * na najbližu dijatonsku liniju/prostor za dati ključ.
+ */
+export function pitchFromClickY(
+  clef: Clef,
+  y: number,
+  topLineY: number,
+  halfStepPx: number,
+): { step: Step; octave: number } {
+  const stepsBelowTop = Math.round((y - topLineY) / halfStepPx);
+  const ref = TOP_LINE_PITCH[clef];
+  return stepDiatonic(ref.step, ref.octave, -stepsBelowTop);
+}
+
+const ACCIDENTAL_SUFFIX: Record<'sharp' | 'flat' | 'natural', string> = {
+  sharp: '#',
+  flat: 'b',
+  natural: '',
+};
+
+/** Tone.js notacija (npr. "C#4") za internu visinu tona. */
+export function toToneNoteName(pitch: NotePitch): string {
+  const suffix = pitch.accidental ? ACCIDENTAL_SUFFIX[pitch.accidental] : '';
+  return `${pitch.step}${suffix}${pitch.octave}`;
+}
+
+export interface ScheduledNote {
+  offsetSeconds: number;
+  durationSeconds: number;
+  noteName: string;
+}
+
+export interface PlaybackSchedule {
+  notes: ScheduledNote[];
+  totalSeconds: number;
+}
+
+/**
+ * Pretvara interni Score model u listu nota za zakazivanje na audio engine-u (vremenski niz,
+ * BPM = otkucaji u minuti gde je otkucaj nota jednaka imeniocu takta — za 4/4 i 3/4 to je četvrtina).
+ * Čista funkcija, nezavisna od Tone.js — lako testabilna.
+ */
+export function buildPlaybackSchedule(score: Score, bpm: number): PlaybackSchedule {
+  const beatSeconds = 60 / bpm;
+  let elapsed = 0;
+  const notes: ScheduledNote[] = [];
+
+  for (const measure of score.measures) {
+    for (const element of measure.elements) {
+      const durationSeconds = durationToBeats(element.duration, score.timeSignature) * beatSeconds;
+      if (element.kind === 'note') {
+        notes.push({ offsetSeconds: elapsed, durationSeconds, noteName: toToneNoteName(element.pitch) });
+      }
+      elapsed += durationSeconds;
+    }
+  }
+
+  return { notes, totalSeconds: elapsed };
+}

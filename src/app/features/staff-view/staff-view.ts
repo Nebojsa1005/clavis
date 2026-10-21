@@ -1,0 +1,50 @@
+import { ChangeDetectionStrategy, Component, ElementRef, effect, inject, viewChild } from '@angular/core';
+import { NotationRendererService, SCORE_ELEMENT_ID_ATTR } from '../../core/services/notation-renderer.service';
+import { NoteInputService } from '../../core/state/note-input.service';
+import { ScoreModelService } from '../../core/state/score-model.service';
+import { SelectionService } from '../../core/state/selection.service';
+
+@Component({
+  selector: 'app-staff-view',
+  templateUrl: './staff-view.html',
+  styleUrl: './staff-view.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class StaffView {
+  private readonly scoreModel = inject(ScoreModelService);
+  private readonly notationRenderer = inject(NotationRendererService);
+  protected readonly noteInput = inject(NoteInputService);
+  protected readonly selection = inject(SelectionService);
+
+  protected readonly canvasHost = viewChild<ElementRef<HTMLDivElement>>('canvasHost');
+
+  constructor() {
+    effect(() => {
+      const score = this.scoreModel.score();
+      const selectedId = this.selection.selectedId();
+      const host = this.canvasHost()?.nativeElement;
+      if (!host) {
+        return;
+      }
+      this.notationRenderer.render(host, score, selectedId);
+    });
+  }
+
+  protected onCanvasClick(event: MouseEvent): void {
+    const target = event.target as Element | null;
+    const hit = target?.closest(`[${SCORE_ELEMENT_ID_ATTR}]`);
+    if (hit) {
+      this.selection.select(hit.getAttribute(SCORE_ELEMENT_ID_ATTR)!);
+      return;
+    }
+
+    const host = this.canvasHost()?.nativeElement;
+    if (!host) {
+      return;
+    }
+    const rect = host.getBoundingClientRect();
+    const y = event.clientY - rect.top;
+    const geometry = this.notationRenderer.getStaffGeometry();
+    this.noteInput.enterPitchFromClick(this.scoreModel.score().clef, y, geometry.topLineY, geometry.halfStepPx);
+  }
+}

@@ -1,6 +1,7 @@
 {
   "name": "clavis",
   "version": "0.0.0",
+  "description": "Minimalistički notni editor u browseru — inspirisan tradicionalnim notnim softverom, sopstveni brend i UI.",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
@@ -28,8 +29,11 @@
     "@angular/forms": "^20.3.0",
     "@angular/platform-browser": "^20.3.0",
     "@angular/router": "^20.3.0",
+    "midi-writer-js": "^3.2.1",
     "rxjs": "~7.8.0",
+    "tone": "^15.1.22",
     "tslib": "^2.3.0",
+    "vexflow": "^5.0.0",
     "zone.js": "~0.15.0"
   },
   "devDependencies": {

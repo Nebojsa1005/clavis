@@ -110,8 +110,8 @@ describe('buildPlaybackSchedule', () => {
     const schedule = buildPlaybackSchedule(score, 120);
 
     expect(schedule.notes).toEqual([
-      { offsetSeconds: 0, durationSeconds: 0.5, noteName: 'C4' },
-      { offsetSeconds: 0.5, durationSeconds: 0.5, noteName: 'D4' },
+      { offsetBeats: 0, durationBeats: 1, offsetSeconds: 0, durationSeconds: 0.5, noteName: 'C4' },
+      { offsetBeats: 1, durationBeats: 1, offsetSeconds: 0.5, durationSeconds: 0.5, noteName: 'D4' },
     ]);
     expect(schedule.totalSeconds).toBe(1);
   });
@@ -122,7 +122,9 @@ describe('buildPlaybackSchedule', () => {
 
     const schedule = buildPlaybackSchedule(score, 120);
 
-    expect(schedule.notes).toEqual([{ offsetSeconds: 0.5, durationSeconds: 0.5, noteName: 'E4' }]);
+    expect(schedule.notes).toEqual([
+      { offsetBeats: 1, durationBeats: 1, offsetSeconds: 0.5, durationSeconds: 0.5, noteName: 'E4' },
+    ]);
     expect(schedule.totalSeconds).toBe(1);
   });
 
@@ -161,6 +163,66 @@ describe('buildPlaybackSchedule with dotted notes', () => {
 
     expect(first.durationSeconds).toBeCloseTo(0.75);
     expect(second.offsetSeconds).toBeCloseTo(0.75);
+  });
+});
+
+describe('buildPlaybackSchedule in beats', () => {
+  it('reports start and length in beats, independent of the tempo', () => {
+    const score = createEmptyScore();
+    score.measures[0].elements.push(createNote('C', 4, 'quarter'), createNote('D', 4, 'half'));
+
+    for (const bpm of [60, 120, 240]) {
+      const { notes, totalBeats } = buildPlaybackSchedule(score, bpm);
+
+      expect(notes.map((n) => [n.offsetBeats, n.durationBeats])).toEqual([
+        [0, 1],
+        [1, 2],
+      ]);
+      expect(totalBeats).toBe(3);
+    }
+  });
+
+  it('derives the seconds from the beats and the tempo', () => {
+    const score = createEmptyScore();
+    score.measures[0].elements.push(createNote('C', 4, 'quarter'), createNote('D', 4, 'half'));
+
+    const { notes, totalSeconds } = buildPlaybackSchedule(score, 90);
+
+    expect(notes[1].offsetSeconds).toBeCloseTo(60 / 90);
+    expect(notes[1].durationSeconds).toBeCloseTo((2 * 60) / 90);
+    expect(totalSeconds).toBeCloseTo((3 * 60) / 90);
+  });
+
+  it('counts beats in the denominator note value', () => {
+    const score = { ...createEmptyScore(), timeSignature: { numerator: 6, denominator: 8 } };
+    score.measures[0].elements.push(createNote('C', 4, 'eighth'), createNote('D', 4, 'quarter'));
+
+    const { notes, totalBeats } = buildPlaybackSchedule(score, 120);
+
+    expect(notes.map((n) => [n.offsetBeats, n.durationBeats])).toEqual([
+      [0, 1],
+      [1, 2],
+    ]);
+    expect(totalBeats).toBe(3);
+  });
+
+  it('adds the beats of tied notes together', () => {
+    const score = createEmptyScore();
+    score.measures[0].elements.push({ ...createNote('C', 4, 'quarter'), tieToNext: true }, createNote('C', 4, 'half'));
+
+    const { notes } = buildPlaybackSchedule(score, 120);
+
+    expect(notes.length).toBe(1);
+    expect(notes[0].durationBeats).toBe(3);
+  });
+
+  it('gives a document the length of its longest staff', () => {
+    const short = createEmptyScore();
+    short.measures[0].elements.push(createNote('C', 4, 'quarter'));
+    const long = createEmptyScore();
+    long.measures[0].elements.push(createNote('C', 4, 'whole'));
+
+    expect(buildDocumentSchedule({ parts: [createPart('A', [short]), createPart('B', [long])] }, 120).totalBeats).toBe(4);
   });
 });
 

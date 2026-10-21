@@ -1,6 +1,7 @@
 import { durationToTicks, TICKS_PER_WHOLE } from './caret.util';
 import { effectiveAccidental } from './key-signature.util';
 import { Clef, NoteDuration, NotePitch, Score, Step, TimeSignature } from './score.model';
+import { tieLinks, tiedTargetIds } from './tie.util';
 
 const DIATONIC_ORDER: Step[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 
@@ -79,12 +80,26 @@ export function buildPlaybackSchedule(score: Score, bpm: number): PlaybackSchedu
   const beatSeconds = 60 / bpm;
   let elapsed = 0;
   const notes: ScheduledNote[] = [];
+  const continuesPreviousNote = tiedTargetIds(tieLinks(score));
+  let sustained: ScheduledNote | null = null;
 
   for (const measure of score.measures) {
     for (const element of measure.elements) {
       const durationSeconds = durationToBeats(element.duration, score.timeSignature, element.dotted) * beatSeconds;
       if (element.kind === 'note') {
-        notes.push({ offsetSeconds: elapsed, durationSeconds, noteName: toToneNoteName(element.pitch, score.keySignature) });
+        if (sustained && continuesPreviousNote.has(element.id)) {
+          // A tied note is not struck again: it only lengthens the note it is tied to.
+          sustained.durationSeconds += durationSeconds;
+        } else {
+          sustained = {
+            offsetSeconds: elapsed,
+            durationSeconds,
+            noteName: toToneNoteName(element.pitch, score.keySignature),
+          };
+          notes.push(sustained);
+        }
+      } else {
+        sustained = null;
       }
       elapsed += durationSeconds;
     }

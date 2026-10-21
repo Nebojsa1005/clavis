@@ -414,6 +414,127 @@ describe('Caret editing (integration)', () => {
     });
   });
 
+  describe('ties', () => {
+    const arcs = () => host().querySelectorAll('.vf-stavetie').length;
+    const flags = () =>
+      scoreModel.score().measures.flatMap((m) => m.elements.map((el) => (el.kind === 'note' && el.tieToNext ? 'T' : '-')));
+    const clickNode = (index: number, modifiers: MouseEventInit = {}) => {
+      host().querySelectorAll('[data-score-element-id]')[index].dispatchEvent(
+        new MouseEvent('click', { bubbles: true, ...modifiers }),
+      );
+      fixture.detectChanges();
+    };
+    const sameNotes = (count: number) => Array.from({ length: count }, () => createNote('C', 4, 'quarter'));
+
+    it('ties a selected run with the T key and shows one arc per link', () => {
+      setup(sameNotes(3));
+      clickNode(0);
+      clickNode(2, { shiftKey: true });
+
+      press('t');
+
+      expect(flags()).toEqual(['T', 'T', '-']);
+      expect(arcs()).toBe(2);
+    });
+
+    it('removes the arcs with a second T', () => {
+      setup(sameNotes(2));
+      clickNode(0);
+      clickNode(1, { shiftKey: true });
+      press('t');
+      expect(arcs()).toBe(1);
+
+      press('t');
+
+      expect(flags()).toEqual(['-', '-']);
+      expect(arcs()).toBe(0);
+    });
+
+    it('does not tie notes of different pitch', () => {
+      setup(quarters('C', 'D'));
+      clickNode(0);
+      clickNode(1, { shiftKey: true });
+
+      press('t');
+
+      expect(arcs()).toBe(0);
+    });
+
+    it('lets T arm a tie in note input mode and ties the next same-pitch note', () => {
+      setup([]);
+      press('n');
+      const { topLineY } = renderer.getStaffGeometry();
+      clickAt(caretX(), topLineY);
+
+      press('t');
+      expect(noteInput.tieArmed()).toBeTrue();
+      clickAt(caretX(), topLineY);
+
+      expect(flags()).toEqual(['T', '-']);
+      expect(arcs()).toBe(1);
+      expect(noteInput.tieArmed()).toBeFalse();
+    });
+
+    it('drops the arc when something is inserted between the tied notes', () => {
+      setup(sameNotes(2));
+      clickNode(0);
+      clickNode(1, { shiftKey: true });
+      press('t');
+      expect(arcs()).toBe(1);
+      selection().clear();
+      press('n');
+      press('ArrowRight');
+
+      press(' ');
+
+      expect(arcs()).toBe(0);
+    });
+
+    it('undoes a tie in one step', () => {
+      setup(sameNotes(3));
+      clickNode(0);
+      clickNode(2, { shiftKey: true });
+      press('t');
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }));
+      fixture.detectChanges();
+
+      expect(arcs()).toBe(0);
+    });
+
+    it('keeps the tie when a tied pair is copied and pasted elsewhere', () => {
+      setup(sameNotes(2), []);
+      clickNode(0);
+      clickNode(1, { shiftKey: true });
+      press('t');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }));
+      selection().clear();
+      caret.setPosition({ measureIndex: 1, voice: 0, tick: 0 });
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true }));
+      fixture.detectChanges();
+
+      expect(arcs()).toBe(2);
+    });
+
+    it('marks the tie button as pressed while a tied note is selected', () => {
+      setup(sameNotes(2));
+      clickNode(0);
+      clickNode(1, { shiftKey: true });
+      press('t');
+      selection().clear();
+      clickNode(0);
+      fixture.detectChanges();
+
+      const button = fixture.nativeElement.querySelector('button[title="Luk trajanja (T)"]') as HTMLButtonElement;
+      expect(button.getAttribute('aria-pressed')).toBe('true');
+    });
+
+    function selection(): SelectionService {
+      return TestBed.inject(SelectionService);
+    }
+  });
+
   describe('range operations', () => {
     let selection: SelectionService;
 

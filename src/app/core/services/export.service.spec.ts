@@ -96,6 +96,43 @@ describe('ExportService', () => {
       expect(service.toMusicXml(score)).toContain('<duration>3</duration>');
     });
 
+    it('writes <tie> and <tied> for a tied pair', () => {
+      const score = createEmptyScore();
+      score.measures[0].elements.push(
+        { ...createNote('C', 4, 'quarter'), tieToNext: true },
+        createNote('C', 4, 'quarter'),
+      );
+
+      const xml = service.toMusicXml(score);
+
+      expect(xml.match(/<tie type="start"\/>/g)?.length).toBe(1);
+      expect(xml.match(/<tie type="stop"\/>/g)?.length).toBe(1);
+      expect(xml).toContain('<notations><tied type="start"/></notations>');
+      expect(xml).toContain('<notations><tied type="stop"/></notations>');
+    });
+
+    it('gives the middle note of a chain both a stop and a start', () => {
+      const score = createEmptyScore();
+      score.measures[0].elements.push(
+        { ...createNote('C', 4, 'quarter'), tieToNext: true },
+        { ...createNote('C', 4, 'quarter'), tieToNext: true },
+        createNote('C', 4, 'quarter'),
+      );
+
+      const xml = service.toMusicXml(score);
+
+      expect(xml).toContain('<tie type="stop"/>\n        <tie type="start"/>');
+      expect(xml).toContain('<notations><tied type="stop"/><tied type="start"/></notations>');
+      expect(xml.match(/<tie /g)?.length).toBe(4);
+    });
+
+    it('writes no tie for a flag that does not join the same pitch', () => {
+      const score = createEmptyScore();
+      score.measures[0].elements.push({ ...createNote('C', 4, 'quarter'), tieToNext: true }, createNote('D', 4, 'quarter'));
+
+      expect(service.toMusicXml(score)).not.toContain('<tie ');
+    });
+
     it('renders rests without a <pitch>', () => {
       const score = createEmptyScore();
       score.measures[0].elements.push(createRest('eighth'));
@@ -116,6 +153,28 @@ describe('ExportService', () => {
   });
 
   describe('toMidi', () => {
+    it('writes a tied pair as one note: fewer bytes than two separate notes, same total length', () => {
+      const separate = createEmptyScore();
+      separate.measures[0].elements.push(createNote('C', 4, 'quarter'), createNote('C', 4, 'quarter'));
+      const tied = createEmptyScore();
+      tied.measures[0].elements.push({ ...createNote('C', 4, 'quarter'), tieToNext: true }, createNote('C', 4, 'quarter'));
+
+      expect(service.toMidi(tied).length).toBeLessThan(service.toMidi(separate).length);
+    });
+
+    it('keeps the timing of what follows a tied chain', () => {
+      const withRest = createEmptyScore();
+      withRest.measures[0].elements.push(
+        { ...createNote('C', 4, 'quarter'), tieToNext: true },
+        createNote('C', 4, 'quarter'),
+        createRest('quarter'),
+        createNote('D', 4, 'quarter'),
+      );
+
+      expect(() => service.toMidi(withRest)).not.toThrow();
+      expect(service.toMidi(withRest).length).toBeGreaterThan(0);
+    });
+
     it('encodes dotted and very short notes without throwing', () => {
       const plain = createEmptyScore();
       plain.measures[0].elements.push(createNote('C', 4, 'quarter'));

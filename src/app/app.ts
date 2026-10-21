@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, HostListener, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, computed, inject, signal } from '@angular/core';
 import { Clef, CLEFS, createEmptyScore, NoteDuration } from './core/models/score.model';
 import { ExportService } from './core/services/export.service';
 import { PersistenceService } from './core/services/persistence.service';
@@ -85,6 +85,16 @@ export class App {
 
   protected onSelectDuration(duration: NoteDuration): void {
     this.noteInput.setDuration(duration);
+  }
+
+  protected readonly tieActive = computed(
+    () =>
+      this.selection.selectedElements().some((el) => el.kind === 'note' && el.tieToNext) ||
+      (this.noteInput.active() && this.noteInput.tieArmed()),
+  );
+
+  protected onToggleTie(): void {
+    this.editing.toggleTie();
   }
 
   protected onToggleDotted(): void {
@@ -196,6 +206,12 @@ export class App {
 
     if (event.ctrlKey && event.key.toLowerCase() === 'y') {
       this.onRedo();
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key.toLowerCase() === 't' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      this.editing.toggleTie();
       event.preventDefault();
       return;
     }

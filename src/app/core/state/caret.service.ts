@@ -33,10 +33,10 @@ export class CaretService {
     this.requested.set(normalizeCaret(this.scoreModel.score(), position));
   }
 
-  /** Inserts an element at the caret and leaves the caret right after it. */
-  insertAtCaret(element: MeasureElement): void {
+  /** Inserts an element at the caret and leaves the caret right after it. `tiePrevious` ties the note before it. */
+  insertAtCaret(element: MeasureElement, tiePrevious = false): void {
     const { measureIndex } = this.position();
-    this.scoreModel.insertElement(measureIndex, this.insertionIndex(), element);
+    this.scoreModel.insertElement(measureIndex, this.insertionIndex(), element, tiePrevious);
 
     const after = positionAfterElement(this.scoreModel.score(), element.id);
     if (after) {

@@ -1,7 +1,8 @@
 import { Injectable } from '@angular/core';
-import { Accidental, Dot, Formatter, Renderer, Stave, StaveNote, Voice } from 'vexflow';
+import { Accidental, Dot, Formatter, Renderer, Stave, StaveNote, StaveTie, Voice } from 'vexflow';
 import { CaretPosition, elementBoundaries } from '../models/caret.util';
 import { Measure, MeasureElement, NoteDuration, Score } from '../models/score.model';
+import { tieLinks } from '../models/tie.util';
 
 const VEXFLOW_DURATION: Record<NoteDuration, string> = {
   whole: 'w',
@@ -118,11 +119,23 @@ export class NotationRendererService {
     renderer.resize(Math.max(totalWidth, container.clientWidth || totalWidth), CANVAS_HEIGHT);
     const context = renderer.getContext();
 
+    const notesById = new Map<string, StaveNote>();
     let x = STAVE_MARGIN_X;
     score.measures.forEach((measure, index) => {
-      this.renderMeasure(context, measure, score, x, index === 0, selectedIds);
+      this.renderMeasure(context, measure, score, x, index === 0, selectedIds, notesById);
       x += STAVE_WIDTH;
     });
+
+    // Ties go last: both notes have to be positioned first, and a tie may cross a barline.
+    for (const link of tieLinks(score)) {
+      const first = notesById.get(link.from.id);
+      const last = notesById.get(link.to.id);
+      if (first && last) {
+        new StaveTie({ firstNote: first, lastNote: last, firstIndexes: [0], lastIndexes: [0] })
+          .setContext(context)
+          .draw();
+      }
+    }
 
     if (caret) {
       this.drawCaret(container, caret);
@@ -156,6 +169,7 @@ export class NotationRendererService {
     x: number,
     isFirst: boolean,
     selectedIds: ReadonlySet<string>,
+    notesById: Map<string, StaveNote>,
   ): void {
     const stave = new Stave(x, STAVE_Y, STAVE_WIDTH);
     if (isFirst) {
@@ -174,6 +188,7 @@ export class NotationRendererService {
         note.setStyle({ fillStyle: SELECTED_NOTE_COLOR, strokeStyle: SELECTED_NOTE_COLOR });
       }
       idByNote.set(note, el.id);
+      notesById.set(el.id, note);
       return note;
     });
     if (tickables.length === 0) {

@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { createEmptyScore, createNote, createRest } from '../models/score.model';
+import { createEmptyScore, createMeasure, createNote, createRest } from '../models/score.model';
 import { ScoreModelService } from './score-model.service';
 
 describe('ScoreModelService', () => {
@@ -324,6 +324,151 @@ describe('ScoreModelService', () => {
       service.insertElements(0, 0, []);
 
       expect(service.canUndo()).toBeFalse();
+    });
+  });
+
+  describe('ties', () => {
+    const tiedPair = () => {
+      service.replaceScore(createEmptyScore());
+      service.appendElement(createNote('C', 4, 'quarter'));
+      service.appendElement(createNote('C', 4, 'quarter'));
+      const [first, second] = service.score().measures[0].elements;
+      service.setTies([first.id], true);
+      return { first, second };
+    };
+    const flags = () =>
+      service.score().measures.flatMap((m) => m.elements.map((el) => (el.kind === 'note' && el.tieToNext ? 'T' : '-')));
+
+    it('sets a tie on a note that can tie to its neighbour', () => {
+      tiedPair();
+
+      expect(flags()).toEqual(['T', '-']);
+    });
+
+    it('refuses a tie to a different pitch', () => {
+      service.replaceScore(createEmptyScore());
+      service.appendElement(createNote('C', 4, 'quarter'));
+      service.appendElement(createNote('D', 4, 'quarter'));
+
+      service.setTies([service.score().measures[0].elements[0].id], true);
+
+      expect(flags()).toEqual(['-', '-']);
+    });
+
+    it('clears a tie', () => {
+      const { first } = tiedPair();
+
+      service.setTies([first.id], false);
+
+      expect(flags()).toEqual(['-', '-']);
+    });
+
+    it('is a single undo step', () => {
+      tiedPair();
+
+      service.undo();
+
+      expect(flags()).toEqual(['-', '-']);
+    });
+
+    it('is dropped when a note is inserted between the tied notes', () => {
+      tiedPair();
+
+      service.insertElement(0, 1, createNote('E', 4, 'quarter'));
+
+      expect(flags()).toEqual(['-', '-', '-']);
+    });
+
+    it('survives an insert that keeps the pair adjacent', () => {
+      tiedPair();
+
+      service.insertElement(0, 0, createNote('E', 4, 'quarter'));
+
+      expect(flags()).toEqual(['-', 'T', '-']);
+    });
+
+    it('is dropped when the pitch of one end changes', () => {
+      tiedPair();
+
+      service.adjustNotePitchBefore(0, 2, 1);
+
+      expect(flags()).toEqual(['-', '-']);
+    });
+
+    it('is dropped when the tied-to note is deleted and the next one differs', () => {
+      service.replaceScore(createEmptyScore());
+      for (const step of ['C', 'C', 'D'] as const) {
+        service.appendElement(createNote(step, 4, 'quarter'));
+      }
+      const [a, b] = service.score().measures[0].elements;
+      service.setTies([a.id], true);
+
+      service.deleteElement(b.id);
+
+      expect(flags()).toEqual(['-', '-']);
+    });
+
+    it('reconnects over a deleted middle note when the pitches still match', () => {
+      service.replaceScore(createEmptyScore());
+      for (const step of ['C', 'C', 'C'] as const) {
+        service.appendElement(createNote(step, 4, 'quarter'));
+      }
+      const [a, b] = service.score().measures[0].elements;
+      service.setTies([a.id, b.id], true);
+
+      service.deleteElement(b.id);
+
+      expect(flags()).toEqual(['T', '-']);
+    });
+
+    it('stays intact when a tied pair is pushed over a barline by reflow', () => {
+      service.replaceScore(createEmptyScore());
+      for (const step of ['C', 'D', 'E', 'G'] as const) {
+        service.appendElement(createNote(step, 4, 'quarter'));
+      }
+      service.appendElement(createNote('A', 4, 'quarter'));
+      service.appendElement(createNote('A', 4, 'quarter'));
+      const second = service.score().measures[1].elements;
+      service.setTies([second[0].id], true);
+
+      service.insertElement(0, 0, createNote('B', 4, 'quarter'));
+
+      expect(flags().filter((f) => f === 'T').length).toBe(1);
+    });
+
+    it('sanitises scores that are loaded with stale ties', () => {
+      const a = { ...createNote('C', 4, 'quarter'), tieToNext: true };
+      service.replaceScore({ ...createEmptyScore(), measures: [createMeasure([a, createNote('D', 4, 'quarter')])] });
+
+      expect(flags()).toEqual(['-', '-']);
+    });
+
+    it('ties the note before an inserted one when asked to', () => {
+      service.replaceScore(createEmptyScore());
+      service.appendElement(createNote('C', 4, 'quarter'));
+
+      service.insertElement(0, 1, createNote('C', 4, 'quarter'), true);
+
+      expect(flags()).toEqual(['T', '-']);
+    });
+
+    it('does not tie to an inserted note of another pitch', () => {
+      service.replaceScore(createEmptyScore());
+      service.appendElement(createNote('C', 4, 'quarter'));
+
+      service.insertElement(0, 1, createNote('D', 4, 'quarter'), true);
+
+      expect(flags()).toEqual(['-', '-']);
+    });
+
+    it('applies the tie together with the insert as one undo step', () => {
+      service.replaceScore(createEmptyScore());
+      service.appendElement(createNote('C', 4, 'quarter'));
+
+      service.insertElement(0, 1, createNote('C', 4, 'quarter'), true);
+      service.undo();
+
+      expect(flags()).toEqual(['-']);
     });
   });
 

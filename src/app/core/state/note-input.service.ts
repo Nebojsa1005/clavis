@@ -13,13 +13,22 @@ export class NoteInputService {
   readonly active = signal(false);
   readonly currentDuration = signal<NoteDuration>('quarter');
   readonly dotted = signal(false);
+  /** When on, the next note entered is tied to the note before it (if both are the same pitch). */
+  readonly tieArmed = signal(false);
 
   toggle(): void {
-    this.active.update((value) => !value);
+    this.setActive(!this.active());
   }
 
   setActive(value: boolean): void {
     this.active.set(value);
+    if (!value) {
+      this.tieArmed.set(false);
+    }
+  }
+
+  toggleTieArmed(): void {
+    this.tieArmed.update((value) => !value);
   }
 
   setDuration(duration: NoteDuration): void {
@@ -36,13 +45,19 @@ export class NoteInputService {
       return;
     }
     const pitch = pitchFromClickY(clef, y, topLineY, halfStepPx);
-    this.caret.insertAtCaret(createNote(pitch.step, pitch.octave, this.currentDuration(), null, this.dotted()));
+    const tiePrevious = this.tieArmed();
+    this.tieArmed.set(false);
+    this.caret.insertAtCaret(
+      createNote(pitch.step, pitch.octave, this.currentDuration(), null, this.dotted()),
+      tiePrevious,
+    );
   }
 
   enterRest(): void {
     if (!this.active()) {
       return;
     }
+    this.tieArmed.set(false);
     this.caret.insertAtCaret(createRest(this.currentDuration(), this.dotted()));
   }
 

@@ -53,34 +53,84 @@ describe('ScoreModelService', () => {
     });
   });
 
-  describe('adjustLastNotePitch', () => {
-    it('moves the most recently added note up a diatonic step', () => {
+  describe('insertElement', () => {
+    it('inserts in the middle of a measure and shifts the rest', () => {
+      service.replaceScore(createEmptyScore());
+      service.appendElement(createNote('C', 4, 'quarter'));
+      service.appendElement(createNote('E', 4, 'quarter'));
+
+      service.insertElement(0, 1, createNote('D', 4, 'quarter'));
+
+      const steps = service.score().measures[0].elements.map((el) => el.kind === 'note' && el.pitch.step);
+      expect(steps).toEqual(['C', 'D', 'E']);
+    });
+
+    it('spills overflow into the next measure', () => {
+      service.replaceScore(createEmptyScore());
+      for (const step of ['C', 'D', 'E', 'F'] as const) {
+        service.appendElement(createNote(step, 4, 'quarter'));
+      }
+
+      service.insertElement(0, 0, createNote('G', 4, 'quarter'));
+
+      expect(service.score().measures.length).toBe(2);
+      expect(service.score().measures[0].elements.length).toBe(4);
+      expect(service.score().measures[1].elements.length).toBe(1);
+    });
+
+    it('can be undone in one step', () => {
       service.replaceScore(createEmptyScore());
       service.appendElement(createNote('C', 4, 'quarter'));
 
-      service.adjustLastNotePitch(1);
+      service.insertElement(0, 0, createNote('D', 4, 'quarter'));
+      service.undo();
 
-      const note = service.score().measures[0].elements[0];
-      expect(note.kind === 'note' && note.pitch.step).toBe('D');
+      expect(service.score().measures[0].elements.length).toBe(1);
+    });
+  });
+
+  describe('adjustNotePitchBefore', () => {
+    it('moves the note right before the position up a diatonic step', () => {
+      service.replaceScore(createEmptyScore());
+      service.appendElement(createNote('C', 4, 'quarter'));
+      service.appendElement(createNote('E', 4, 'quarter'));
+
+      service.adjustNotePitchBefore(0, 1, 1);
+
+      const [first, second] = service.score().measures[0].elements;
+      expect(first.kind === 'note' && first.pitch.step).toBe('D');
+      expect(second.kind === 'note' && second.pitch.step).toBe('E');
     });
 
-    it('skips trailing rests and adjusts the last actual note', () => {
+    it('skips rests and adjusts the nearest note before the position', () => {
       service.replaceScore(createEmptyScore());
       service.appendElement(createNote('C', 4, 'quarter'));
       service.appendElement(createRest('quarter'));
 
-      service.adjustLastNotePitch(-1);
+      service.adjustNotePitchBefore(0, 2, -1);
 
       const elements = service.score().measures[0].elements;
       expect(elements[0].kind === 'note' && elements[0].pitch.step).toBe('B');
       expect(elements[0].kind === 'note' && elements[0].pitch.octave).toBe(3);
     });
 
+    it('looks back into the previous measure when the position is at the start of one', () => {
+      service.replaceScore(createEmptyScore());
+      for (const step of ['C', 'D', 'E', 'F', 'G'] as const) {
+        service.appendElement(createNote(step, 4, 'quarter'));
+      }
+
+      service.adjustNotePitchBefore(1, 0, 1);
+
+      const fourth = service.score().measures[0].elements[3];
+      expect(fourth.kind === 'note' && fourth.pitch.step).toBe('G');
+    });
+
     it('is a no-op when the score has only rests', () => {
       service.replaceScore(createEmptyScore());
       service.appendElement(createRest('quarter'));
 
-      expect(() => service.adjustLastNotePitch(1)).not.toThrow();
+      expect(() => service.adjustNotePitchBefore(0, 1, 1)).not.toThrow();
       expect(service.score().measures[0].elements[0].kind).toBe('rest');
     });
   });

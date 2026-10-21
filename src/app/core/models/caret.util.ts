@@ -117,6 +117,19 @@ export function endOfScore(score: Score): CaretPosition {
   return { measureIndex, voice: 0, tick };
 }
 
+/** Caret position right after the element with the given id, or null if it is not in the score. */
+export function positionAfterElement(score: Score, elementId: string): CaretPosition | null {
+  for (let measureIndex = 0; measureIndex < score.measures.length; measureIndex++) {
+    const elements = score.measures[measureIndex].elements;
+    const index = elements.findIndex((element) => element.id === elementId);
+    if (index !== -1) {
+      const tick = elementBoundaries(score.measures[measureIndex])[index + 1];
+      return normalizeCaret(score, { measureIndex, voice: 0, tick });
+    }
+  }
+  return null;
+}
+
 /** Index in `measure.elements` that a new element would be inserted before (== number of elements before the caret). */
 export function insertionIndex(measure: Measure, tick: number): number {
   return elementBoundaries(measure).indexOf(snapTick(measure, tick));

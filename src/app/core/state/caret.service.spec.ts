@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { CARET_START } from '../models/caret.util';
-import { createEmptyScore, createMeasure, createNote } from '../models/score.model';
+import { createEmptyScore, createMeasure, createNote, createRest } from '../models/score.model';
 import { CaretService } from './caret.service';
 import { ScoreModelService } from './score-model.service';
 
@@ -87,5 +87,59 @@ describe('CaretService', () => {
     caret.moveToEnd();
     caret.moveRight();
     expect(caret.position()).toEqual({ measureIndex: 1, voice: 0, tick: 128 });
+  });
+
+  describe('insertAtCaret', () => {
+    const steps = () =>
+      scoreModel.score().measures.map((m) => m.elements.map((el) => (el.kind === 'note' ? el.pitch.step : 'r')));
+
+    it('inserts in the middle and moves the caret after the new element', () => {
+      caret.setPosition({ measureIndex: 0, voice: 0, tick: 64 });
+
+      caret.insertAtCaret(createNote('G', 4, 'quarter'));
+
+      expect(steps()[0]).toEqual(['C', 'G', 'D']);
+      expect(caret.position()).toEqual({ measureIndex: 0, voice: 0, tick: 128 });
+    });
+
+    it('inserts at the very start', () => {
+      caret.insertAtCaret(createRest('quarter'));
+
+      expect(steps()[0]).toEqual(['r', 'C', 'D']);
+      expect(caret.position().tick).toBe(64);
+    });
+
+    it('lets consecutive inserts build up in order', () => {
+      caret.setPosition({ measureIndex: 0, voice: 0, tick: 64 });
+
+      caret.insertAtCaret(createNote('E', 4, 'quarter'));
+      caret.insertAtCaret(createNote('F', 4, 'quarter'));
+
+      expect(steps()[0]).toEqual(['C', 'E', 'F', 'D']);
+      expect(caret.position().tick).toBe(192);
+    });
+
+    it('carries the caret into the next measure when an insert overflows the last one', () => {
+      scoreModel.replaceScore({
+        ...createEmptyScore(),
+        measures: [createMeasure(['C', 'D', 'E', 'F'].map((s) => createNote(s as 'C', 4, 'quarter')))],
+      });
+      caret.moveToEnd();
+
+      caret.insertAtCaret(createNote('G', 4, 'quarter'));
+
+      expect(steps().length).toBe(2);
+      expect(caret.position()).toEqual({ measureIndex: 1, voice: 0, tick: 64 });
+    });
+
+    it('is undone together with the score change and the caret stays valid', () => {
+      caret.setPosition({ measureIndex: 0, voice: 0, tick: 128 });
+      caret.insertAtCaret(createNote('G', 4, 'quarter'));
+
+      scoreModel.undo();
+
+      expect(steps()[0]).toEqual(['C', 'D']);
+      expect(caret.position().tick).toBeLessThanOrEqual(128);
+    });
   });
 });

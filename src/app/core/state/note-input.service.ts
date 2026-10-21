@@ -1,12 +1,14 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { pitchFromClickY } from '../models/notation.util';
 import { Clef, NoteDuration, createNote, createRest } from '../models/score.model';
+import { CaretService } from './caret.service';
 import { ScoreModelService } from './score-model.service';
 
 /** UI-stanje za "mod unosa nota": da li je aktivan i koje je trenutno trajanje. */
 @Injectable({ providedIn: 'root' })
 export class NoteInputService {
   private readonly scoreModel = inject(ScoreModelService);
+  private readonly caret = inject(CaretService);
 
   readonly active = signal(false);
   readonly currentDuration = signal<NoteDuration>('quarter');
@@ -23,26 +25,27 @@ export class NoteInputService {
     this.currentDuration.set(duration);
   }
 
-  /** y je u SVG px (ista vrednost važi za sve taktove — svi stavovi su u istom redu). */
+  /** Inserts a note at the caret; y is in SVG px (the same for every measure, they share one row). */
   enterPitchFromClick(clef: Clef, y: number, topLineY: number, halfStepPx: number): void {
     if (!this.active()) {
       return;
     }
     const pitch = pitchFromClickY(clef, y, topLineY, halfStepPx);
-    this.scoreModel.appendElement(createNote(pitch.step, pitch.octave, this.currentDuration()));
+    this.caret.insertAtCaret(createNote(pitch.step, pitch.octave, this.currentDuration()));
   }
 
   enterRest(): void {
     if (!this.active()) {
       return;
     }
-    this.scoreModel.appendElement(createRest(this.currentDuration()));
+    this.caret.insertAtCaret(createRest(this.currentDuration()));
   }
 
+  /** Moves the pitch of the note just before the caret by one diatonic step. */
   nudgeLastPitch(delta: 1 | -1): void {
     if (!this.active()) {
       return;
     }
-    this.scoreModel.adjustLastNotePitch(delta);
+    this.scoreModel.adjustNotePitchBefore(this.caret.position().measureIndex, this.caret.insertionIndex(), delta);
   }
 }

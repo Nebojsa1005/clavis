@@ -6,8 +6,10 @@ import {
   insertionIndex,
   nextCaret,
   normalizeCaret,
+  positionAfterElement,
   previousCaret,
 } from '../models/caret.util';
+import { MeasureElement } from '../models/score.model';
 import { ScoreModelService } from './score-model.service';
 
 /**
@@ -29,6 +31,17 @@ export class CaretService {
 
   setPosition(position: CaretPosition): void {
     this.requested.set(normalizeCaret(this.scoreModel.score(), position));
+  }
+
+  /** Inserts an element at the caret and leaves the caret right after it. */
+  insertAtCaret(element: MeasureElement): void {
+    const { measureIndex } = this.position();
+    this.scoreModel.insertElement(measureIndex, this.insertionIndex(), element);
+
+    const after = positionAfterElement(this.scoreModel.score(), element.id);
+    if (after) {
+      this.requested.set(after);
+    }
   }
 
   moveLeft(): void {

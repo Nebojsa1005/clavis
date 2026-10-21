@@ -104,7 +104,7 @@ describe('StaffView', () => {
     expect(renderSpy.calls.mostRecent().args[3]).toEqual({ measureIndex: 0, voice: 0, tick: 0 });
   });
 
-  it('moves the caret to the clicked position when note input is active', () => {
+  it('inserts the note at the clicked position and leaves the caret after it', () => {
     noteInput.setActive(true);
     scoreModel.replaceScore({
       ...createEmptyScore(),
@@ -126,6 +126,10 @@ describe('StaffView', () => {
 
     host.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 300, clientY: 80 }));
 
-    expect(caret.position()).toEqual({ measureIndex: 1, voice: 0, tick: 0 });
+    const measures = scoreModel.score().measures;
+    expect(measures[0].elements.length).toBe(2);
+    expect(measures[1].elements.length).toBe(2);
+    expect(measures[1].elements[0].kind).toBe('note');
+    expect(caret.position()).toEqual({ measureIndex: 1, voice: 0, tick: 64 });
   });
 });

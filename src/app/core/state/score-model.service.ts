@@ -1,4 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
+import { insertWithReflow } from '../models/insert.util';
 import { durationToBeats, stepDiatonic } from '../models/notation.util';
 import { createMeasure, createTestScore, MeasureElement, Score } from '../models/score.model';
 
@@ -43,14 +44,23 @@ export class ScoreModelService {
     });
   }
 
-  /** Pomera visinu tona poslednje unete note (bez predznaka) za `delta` dijatonskih koraka. */
-  adjustLastNotePitch(delta: 1 | -1): void {
+  /** Inserts an element before `index` in a measure; overflow spills into the following measures. */
+  insertElement(measureIndex: number, index: number, element: MeasureElement): void {
+    this.mutate((score) => insertWithReflow(score, measureIndex, index, element));
+  }
+
+  /**
+   * Moves the pitch of the nearest note before the given position (skipping rests, crossing
+   * barlines) by `delta` diatonic steps. `index` counts the elements before the caret in the measure.
+   */
+  adjustNotePitchBefore(measureIndex: number, index: number, delta: 1 | -1): void {
     this.mutate((score) => {
       const measures = score.measures.map((measure) => ({ ...measure, elements: [...measure.elements] }));
 
-      for (let mi = measures.length - 1; mi >= 0; mi--) {
+      for (let mi = measureIndex; mi >= 0; mi--) {
         const elements = measures[mi].elements;
-        for (let ei = elements.length - 1; ei >= 0; ei--) {
+        const start = mi === measureIndex ? index - 1 : elements.length - 1;
+        for (let ei = start; ei >= 0; ei--) {
           const el = elements[ei];
           if (el.kind === 'note') {
             const next = stepDiatonic(el.pitch.step, el.pitch.octave, delta);

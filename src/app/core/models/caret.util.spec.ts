@@ -8,6 +8,7 @@ import {
   measureCapacityTicks,
   nextCaret,
   normalizeCaret,
+  positionAfterElement,
   previousCaret,
   snapTick,
 } from './caret.util';
@@ -183,6 +184,34 @@ describe('caret.util', () => {
         voice: 0,
         tick: 64,
       });
+    });
+  });
+
+  describe('positionAfterElement', () => {
+    it('points right after the element inside its measure', () => {
+      const first = createNote('C', 4, 'quarter');
+      const second = createNote('D', 4, 'quarter');
+      const score = scoreWithMeasures(createMeasure([first, second]));
+
+      expect(positionAfterElement(score, first.id)).toEqual({ measureIndex: 0, voice: 0, tick: 64 });
+      expect(positionAfterElement(score, second.id)).toEqual({ measureIndex: 0, voice: 0, tick: 128 });
+    });
+
+    it('rolls over to the next measure when the element completes its measure', () => {
+      const last = createNote('F', 4, 'quarter');
+      const full = createMeasure([
+        createNote('C', 4, 'quarter'),
+        createNote('D', 4, 'quarter'),
+        createNote('E', 4, 'quarter'),
+        last,
+      ]);
+      const score = scoreWithMeasures(full, createMeasure([createRest('quarter')]));
+
+      expect(positionAfterElement(score, last.id)).toEqual({ measureIndex: 1, voice: 0, tick: 0 });
+    });
+
+    it('returns null for an unknown id', () => {
+      expect(positionAfterElement(createEmptyScore(), 'nope')).toBeNull();
     });
   });
 });

@@ -83,4 +83,21 @@ describe('StaffView', () => {
     expect(elements.length).toBe(1);
     expect(elements[0].kind).toBe('note');
   });
+
+  it('passes no caret to the renderer while note input is off', () => {
+    const fixture = TestBed.createComponent(StaffView);
+    fixture.detectChanges();
+
+    expect(renderSpy.calls.mostRecent().args[3]).toBeNull();
+  });
+
+  it('passes the caret position to the renderer once note input is on', () => {
+    const fixture = TestBed.createComponent(StaffView);
+    fixture.detectChanges();
+
+    noteInput.setActive(true);
+    fixture.detectChanges();
+
+    expect(renderSpy.calls.mostRecent().args[3]).toEqual({ measureIndex: 0, voice: 0, tick: 0 });
+  });
 });

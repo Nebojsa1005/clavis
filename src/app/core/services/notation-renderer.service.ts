@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Accidental, Formatter, Renderer, Stave, StaveNote, Voice } from 'vexflow';
+import { CaretPosition, elementBoundaries } from '../models/caret.util';
 import { Measure, MeasureElement, NoteDuration, Score } from '../models/score.model';
 
 const VEXFLOW_DURATION: Record<NoteDuration, string> = {
@@ -25,16 +26,35 @@ const CANVAS_HEIGHT = 200;
 const SELECTED_NOTE_COLOR = '#3b5bfd';
 
 export const SCORE_ELEMENT_ID_ATTR = 'data-score-element-id';
+export const CARET_CLASS = 'clavis-caret';
+
+/** Horizontal gap between the caret and the note head it sits in front of. */
+const CARET_GAP_BEFORE_NOTE = 8;
+/** Extra gap used when the note has an accidental, so the caret does not cut through it. */
+const CARET_GAP_BEFORE_ACCIDENTAL = 18;
+/** Distance from the last note head to a caret placed after it. */
+const CARET_GAP_AFTER_LAST_NOTE = 24;
+/** How far the caret line extends above and below the staff lines. */
+const CARET_OVERSHOOT_Y = 14;
 
 export interface StaffGeometry {
   topLineY: number;
   halfStepPx: number;
 }
 
+/** Caret stops of one measure: tick values (`elementBoundaries()`) and their x coordinates in SVG px. */
+export interface MeasureLayout {
+  startX: number;
+  endX: number;
+  ticks: number[];
+  stopXs: number[];
+}
+
 /** Wrapper oko VexFlow-a: crta interni Score model, bez sopstvenog stanja. */
 @Injectable({ providedIn: 'root' })
 export class NotationRendererService {
   private cachedGeometry: StaffGeometry | null = null;
+  private layout: MeasureLayout[] = [];
 
   /** Geometrija je ista za sve taktove (svi staff-ovi su na istom y=STAVE_Y), zato se računa jednom. */
   getStaffGeometry(): StaffGeometry {
@@ -48,8 +68,24 @@ export class NotationRendererService {
     return this.cachedGeometry;
   }
 
-  render(container: HTMLDivElement, score: Score, selectedId: string | null = null): void {
+  /** X coordinate of a caret position in the last render, or null if the measure was not rendered. */
+  getCaretX(position: CaretPosition): number | null {
+    const measure = this.layout[position.measureIndex];
+    if (!measure) {
+      return null;
+    }
+    const index = measure.ticks.indexOf(position.tick);
+    return index === -1 ? null : (measure.stopXs[index] ?? null);
+  }
+
+  render(
+    container: HTMLDivElement,
+    score: Score,
+    selectedId: string | null = null,
+    caret: CaretPosition | null = null,
+  ): void {
     container.replaceChildren();
+    this.layout = [];
 
     const measureCount = score.measures.length || 1;
     const totalWidth = STAVE_MARGIN_X * 2 + STAVE_WIDTH * measureCount;
@@ -63,6 +99,30 @@ export class NotationRendererService {
       this.renderMeasure(context, measure, score, x, index === 0, selectedId);
       x += STAVE_WIDTH;
     });
+
+    if (caret) {
+      this.drawCaret(container, caret);
+    }
+  }
+
+  private drawCaret(container: HTMLDivElement, caret: CaretPosition): void {
+    const x = this.getCaretX(caret);
+    const svg = container.querySelector('svg');
+    if (x === null || !svg) {
+      return;
+    }
+
+    const { topLineY, halfStepPx } = this.getStaffGeometry();
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('class', CARET_CLASS);
+    line.setAttribute('x1', String(x));
+    line.setAttribute('x2', String(x));
+    line.setAttribute('y1', String(topLineY - CARET_OVERSHOOT_Y));
+    line.setAttribute('y2', String(topLineY + halfStepPx * 8 + CARET_OVERSHOOT_Y));
+    line.setAttribute('stroke', SELECTED_NOTE_COLOR);
+    line.setAttribute('stroke-width', '2');
+    line.setAttribute('pointer-events', 'none');
+    svg.appendChild(line);
   }
 
   private renderMeasure(
@@ -93,6 +153,7 @@ export class NotationRendererService {
       return note;
     });
     if (tickables.length === 0) {
+      this.layout.push({ startX: x, endX: x + STAVE_WIDTH, ticks: [0], stopXs: [stave.getNoteStartX()] });
       return;
     }
 
@@ -106,6 +167,13 @@ export class NotationRendererService {
     for (const note of tickables) {
       note.getSVGElement()?.setAttribute(SCORE_ELEMENT_ID_ATTR, idByNote.get(note)!);
     }
+
+    const stopXs = tickables.map(
+      (note) => note.getAbsoluteX() - (note.getModifiersByType(Accidental.CATEGORY).length > 0 ? CARET_GAP_BEFORE_ACCIDENTAL : CARET_GAP_BEFORE_NOTE),
+    );
+    const lastNote = tickables[tickables.length - 1];
+    stopXs.push(Math.min(lastNote.getAbsoluteX() + CARET_GAP_AFTER_LAST_NOTE, stave.getNoteEndX()));
+    this.layout.push({ startX: x, endX: x + STAVE_WIDTH, ticks: elementBoundaries(measure), stopXs });
   }
 
   private toStaveNote(element: MeasureElement, clef: Score['clef']): StaveNote {

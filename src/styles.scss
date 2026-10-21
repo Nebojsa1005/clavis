@@ -47,3 +47,14 @@ body {
 button {
   font-family: inherit;
 }
+
+// The caret line is drawn by NotationRendererService outside Angular's view encapsulation, so it is styled globally.
+.clavis-caret {
+  animation: clavis-caret-blink 1s steps(1) infinite;
+}
+
+@keyframes clavis-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}

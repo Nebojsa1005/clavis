@@ -33,7 +33,7 @@ describe('StaffView', () => {
     fixture.detectChanges();
 
     expect(renderSpy).toHaveBeenCalledTimes(1);
-    expect(renderSpy.calls.mostRecent().args[1]).toBe(scoreModel.score());
+    expect(renderSpy.calls.mostRecent().args[1]).toBe(scoreModel.document());
     expect(renderSpy.calls.mostRecent().args[2]).toEqual(new Set());
   });
 

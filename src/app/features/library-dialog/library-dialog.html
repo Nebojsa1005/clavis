@@ -1,0 +1,50 @@
+<div class="backdrop" (click)="close()">
+  <div
+    class="dialog"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    #dialog
+    [attr.aria-label]="mode() === 'open' ? 'Otvori partituru' : 'Sačuvaj kao'"
+    (click)="$event.stopPropagation()"
+    (keydown.escape)="close()"
+  >
+    @if (mode() === 'saveAs') {
+      <h2>Sačuvaj kao</h2>
+      <form class="save-form" (submit)="onSaveAs($event, nameInput.value)">
+        <label for="score-name">Naziv partiture</label>
+        <input id="score-name" #nameInput type="text" maxlength="80" [value]="session.currentName()" />
+        <button type="submit" class="primary">Sačuvaj</button>
+      </form>
+    } @else {
+      <h2>Otvori partituru</h2>
+      <ul class="entries">
+        @for (entry of session.scores(); track entry.id) {
+          <li class="entry" [class.entry--current]="entry.id === session.currentId()">
+            <span class="entry__name">{{ entry.name }}</span>
+            <span class="entry__date">{{ entry.modified | date: 'dd.MM.yyyy HH:mm' }}</span>
+            <button type="button" (click)="onOpen(entry.id)">Otvori</button>
+            <button
+              type="button"
+              class="danger"
+              [class.danger--armed]="pendingDeleteId() === entry.id"
+              (click)="onDelete(entry.id)"
+            >
+              {{ pendingDeleteId() === entry.id ? 'Potvrdi brisanje' : 'Obriši' }}
+            </button>
+          </li>
+        } @empty {
+          <li class="empty">Još nema sačuvanih partitura.</li>
+        }
+      </ul>
+    }
+
+    @if (error()) {
+      <p class="error" role="alert">{{ error() }}</p>
+    }
+
+    <div class="actions">
+      <button type="button" (click)="close()">Zatvori</button>
+    </div>
+  </div>
+</div>

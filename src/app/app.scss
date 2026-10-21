@@ -30,6 +30,19 @@
   gap: var(--space-1);
 }
 
+.score-title {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  color: var(--color-fg-muted);
+}
+
+.score-title__dirty {
+  color: var(--color-accent);
+}
+
 .toolbar__group--playback {
   margin-left: auto;
 }

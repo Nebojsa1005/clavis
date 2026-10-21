@@ -6,7 +6,9 @@
 
     <div class="toolbar__group" aria-label="Fajl">
       <button type="button" (click)="onNew()" title="Nova, prazna partitura">Novo</button>
-      <button type="button" (click)="onSave()" title="Sačuvaj lokalno (IndexedDB)">Sačuvaj</button>
+      <button type="button" (click)="onOpen()" title="Otvori sačuvanu partituru">Otvori</button>
+      <button type="button" (click)="onSave()" title="Sačuvaj (Ctrl+S)">Sačuvaj</button>
+      <button type="button" (click)="onSaveAs()" title="Sačuvaj kao nova partitura">Sačuvaj kao</button>
       <button type="button" (click)="onExportJson()" title="Export JSON">JSON</button>
       <input
         type="file"
@@ -17,6 +19,10 @@
       />
       <button type="button" (click)="jsonFileInput.click()" title="Import JSON">Import</button>
     </div>
+
+    <span class="score-title" [title]="session.currentName()">
+      {{ session.currentName() }}@if (session.dirty()) {<span class="score-title__dirty" title="Nesačuvane izmene"> •</span>}
+    </span>
 
     <div class="toolbar__group" aria-label="Export">
       <button type="button" (click)="onExportMusicXml()" title="Export MusicXML">XML</button>
@@ -83,6 +89,10 @@
     </div>
   </header>
 
+  @if (dialogMode(); as mode) {
+    <app-library-dialog [mode]="mode" (closed)="dialogMode.set(null)" />
+  }
+
   <main class="workspace">
     <div class="duration-palette" aria-label="Trajanja nota">
       @for (option of durationOptions; track option.value) {
@@ -121,5 +131,7 @@
     <div class="staff-area">
       <app-staff-view />
     </div>
+
+    <app-tracks-panel />
   </main>
 </div>

@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { createEmptyScore, createMeasure, createNote, createRest } from '../models/score.model';
+import { allStaves, createPart, findStaff } from '../models/score-document';
 import { ScoreModelService } from './score-model.service';
 
 describe('ScoreModelService', () => {
@@ -472,6 +473,217 @@ describe('ScoreModelService', () => {
     });
   });
 
+  describe('document with several staves', () => {
+    let bassId: string;
+    let trebleId: string;
+
+    const stepsOf = (id: string) =>
+      findStaff(service.document(), id)!.score.measures.map((m) => m.elements.map((el) => (el.kind === 'note' ? el.pitch.step : 'r')));
+
+    beforeEach(() => {
+      service.replaceScore(createEmptyScore());
+      trebleId = service.activeStaffId();
+      service.addPart('piano');
+      bassId = allStaves(service.document())[2].staff.id;
+      service.setActiveStaff(trebleId);
+    });
+
+    it('starts as one instrument with one staff', () => {
+      service.replaceScore(createEmptyScore());
+
+      expect(service.document().parts.length).toBe(1);
+      expect(service.document().parts[0].staves.length).toBe(1);
+      expect(service.activeStaffId()).toBe(service.document().parts[0].staves[0].id);
+    });
+
+    it('exposes the active staff as the score', () => {
+      service.appendElement(createNote('C', 4, 'quarter'));
+
+      service.setActiveStaff(bassId);
+      expect(service.score().measures[0].elements.length).toBe(0);
+
+      service.setActiveStaff(trebleId);
+      expect(service.score().measures[0].elements.length).toBe(1);
+    });
+
+    it('ignores an unknown staff id', () => {
+      service.setActiveStaff('nope');
+
+      expect(service.activeStaffId()).toBe(trebleId);
+    });
+
+    it('does not create undo steps when only the active staff changes', () => {
+      service.replaceScore(createEmptyScore());
+      service.addPart('piano');
+      service.replaceDocument(service.document());
+
+      service.setActiveStaff(allStaves(service.document())[1].staff.id);
+
+      expect(service.canUndo()).toBeFalse();
+    });
+
+    describe('addPart', () => {
+      it('adds a grand staff with a treble and a bass staff below the existing ones', () => {
+        const parts = service.document().parts;
+
+        expect(parts.length).toBe(2);
+        expect(parts[1].name).toBe('Klavir');
+        expect(parts[1].staves.map((s) => s.score.clef)).toEqual(['treble', 'bass']);
+      });
+
+      it('makes the first staff of the new instrument active', () => {
+        service.addPart('violin');
+
+        const last = service.document().parts[2];
+        expect(service.activeStaffId()).toBe(last.staves[0].id);
+      });
+
+      it('gives the new staves the shared signatures and the same number of measures', () => {
+        service.replaceScore({ ...createEmptyScore(), keySignature: 'D', timeSignature: { numerator: 3, denominator: 4 } });
+        for (const step of ['C', 'D', 'E', 'F', 'G', 'A'] as const) {
+          service.appendElement(createNote(step, 4, 'quarter'));
+        }
+
+        service.addPart('cello');
+
+        const cello = service.document().parts[1].staves[0].score;
+        expect(cello.keySignature).toBe('D');
+        expect(cello.timeSignature).toEqual({ numerator: 3, denominator: 4 });
+        expect(cello.measures.length).toBe(2);
+        expect(cello.clef).toBe('bass');
+      });
+
+      it('rejects an unknown instrument', () => {
+        expect(service.addPart('kazoo')).toBeNull();
+        expect(service.document().parts.length).toBe(2);
+      });
+
+      it('can be undone and redone', () => {
+        service.undo();
+        expect(service.document().parts.length).toBe(1);
+        expect(service.activeStaffId()).toBe(trebleId);
+
+        service.redo();
+        expect(service.document().parts.length).toBe(2);
+      });
+    });
+
+    describe('editing', () => {
+      it('only changes the active staff', () => {
+        service.setActiveStaff(bassId);
+
+        service.appendElement(createNote('C', 3, 'quarter'));
+
+        expect(stepsOf(bassId)).toEqual([['C']]);
+        expect(stepsOf(trebleId)).toEqual([[]]);
+      });
+
+      it('keeps all staves the same length when one of them overflows into a new measure', () => {
+        for (const step of ['C', 'D', 'E', 'F', 'G'] as const) {
+          service.appendElement(createNote(step, 4, 'quarter'));
+        }
+
+        expect(stepsOf(trebleId).length).toBe(2);
+        expect(stepsOf(bassId).length).toBe(2);
+        expect(stepsOf(bassId)[1]).toEqual([]);
+      });
+
+      it('keeps a trailing measure while any staff still has notes in it', () => {
+        for (const step of ['C', 'D', 'E', 'F', 'G'] as const) {
+          service.appendElement(createNote(step, 4, 'quarter'));
+        }
+        service.setActiveStaff(bassId);
+        service.appendElement(createNote('C', 3, 'whole'));
+
+        service.setActiveStaff(trebleId);
+        service.deleteElements([service.score().measures[1].elements[0].id]);
+
+        expect(stepsOf(trebleId).length).toBe(2);
+        expect(stepsOf(bassId).length).toBe(2);
+      });
+
+      it('drops the trailing measure once it is empty in every staff', () => {
+        for (const step of ['C', 'D', 'E', 'F', 'G'] as const) {
+          service.appendElement(createNote(step, 4, 'quarter'));
+        }
+
+        service.deleteElements([service.score().measures[1].elements[0].id]);
+
+        expect(stepsOf(trebleId).length).toBe(1);
+        expect(stepsOf(bassId).length).toBe(1);
+      });
+
+      it('undoes an edit of a staff that is not active any more', () => {
+        service.setActiveStaff(bassId);
+        service.appendElement(createNote('C', 3, 'quarter'));
+        service.setActiveStaff(trebleId);
+
+        service.undo();
+
+        expect(stepsOf(bassId)).toEqual([[]]);
+      });
+    });
+
+    describe('shared signatures', () => {
+      it('changes the key signature of every staff', () => {
+        service.setKeySignature('G');
+
+        expect(allStaves(service.document()).map((r) => r.staff.score.keySignature)).toEqual(['G', 'G', 'G']);
+      });
+
+      it('changes the time signature of every staff and reflows each one', () => {
+        for (const step of ['C', 'D', 'E', 'F'] as const) {
+          service.appendElement(createNote(step, 4, 'quarter'));
+        }
+        service.setActiveStaff(bassId);
+        for (const step of ['C', 'D', 'E', 'F'] as const) {
+          service.appendElement(createNote(step, 3, 'quarter'));
+        }
+
+        service.setTimeSignature({ numerator: 3, denominator: 4 });
+
+        expect(stepsOf(trebleId)).toEqual([['C', 'D', 'E'], ['F']]);
+        expect(stepsOf(bassId)).toEqual([['C', 'D', 'E'], ['F']]);
+        expect(allStaves(service.document()).every((r) => r.staff.score.timeSignature.numerator === 3)).toBeTrue();
+      });
+
+      it('changes the clef of the active staff only', () => {
+        service.setActiveStaff(bassId);
+
+        service.setClef('tenor');
+
+        expect(findStaff(service.document(), bassId)?.score.clef).toBe('tenor');
+        expect(findStaff(service.document(), trebleId)?.score.clef).toBe('treble');
+      });
+    });
+
+    describe('replaceDocument', () => {
+      it('loads a whole piece, forgets the history and returns to the first staff', () => {
+        service.setActiveStaff(bassId);
+        service.appendElement(createNote('C', 3, 'quarter'));
+        const doc = { parts: [createPart('Violina', [createEmptyScore()])] };
+
+        service.replaceDocument(doc);
+
+        expect(service.document().parts.length).toBe(1);
+        expect(service.canUndo()).toBeFalse();
+        expect(service.activeStaffId()).toBe(doc.parts[0].staves[0].id);
+      });
+
+      it('normalizes what it loads', () => {
+        const uneven = { parts: [createPart('Klavir', [createEmptyScore(), createEmptyScore('bass')])] };
+        uneven.parts[0].staves[0].score = {
+          ...createEmptyScore(),
+          measures: [createMeasure([createNote('C', 4, 'whole')]), createMeasure([createNote('D', 4, 'whole')])],
+        };
+
+        service.replaceDocument(uneven);
+
+        expect(service.document().parts[0].staves[1].score.measures.length).toBe(2);
+      });
+    });
+  });
+
   describe('undo/redo', () => {
     it('reverts the last mutation on undo', () => {
       service.replaceScore(createEmptyScore());
@@ -538,6 +750,129 @@ describe('ScoreModelService', () => {
       expect(() => service.undo()).not.toThrow();
       expect(() => service.redo()).not.toThrow();
       expect(service.score()).toBe(empty);
+    });
+  });
+
+  describe('managing instruments', () => {
+    let trebleId: string;
+
+    beforeEach(() => {
+      service.replaceScore(createEmptyScore());
+      trebleId = service.activeStaffId();
+      service.addPart('piano');
+      service.addPart('violin');
+      service.setActiveStaff(trebleId);
+    });
+
+    const names = () => service.document().parts.map((p) => p.name);
+    const partId = (index: number) => service.document().parts[index].id;
+
+    describe('removePart', () => {
+      it('removes an instrument with all its staves', () => {
+        expect(service.removePart(partId(1))).toBeTrue();
+
+        expect(names()).toEqual(['Instrument', 'Violina']);
+        expect(allStaves(service.document()).length).toBe(2);
+      });
+
+      it('refuses to remove the last instrument', () => {
+        service.removePart(partId(2));
+        service.removePart(partId(1));
+
+        expect(service.removePart(partId(0))).toBeFalse();
+        expect(names()).toEqual(['Instrument']);
+      });
+
+      it('ignores an unknown id', () => {
+        expect(service.removePart('nope')).toBeFalse();
+        expect(names().length).toBe(3);
+      });
+
+      it('moves the active staff to the next instrument when its own instrument goes', () => {
+        service.setActiveStaff(service.document().parts[1].staves[1].id);
+
+        service.removePart(partId(1));
+
+        expect(service.activeStaffId()).toBe(service.document().parts[1].staves[0].id);
+        expect(service.document().parts[1].name).toBe('Violina');
+      });
+
+      it('falls back to the previous instrument when the last one is removed while active', () => {
+        service.setActiveStaff(service.document().parts[2].staves[0].id);
+
+        service.removePart(partId(2));
+
+        expect(service.activeStaffId()).toBe(service.document().parts[1].staves[0].id);
+      });
+
+      it('keeps the active staff when another instrument is removed', () => {
+        service.removePart(partId(2));
+
+        expect(service.activeStaffId()).toBe(trebleId);
+      });
+
+      it('is undoable', () => {
+        service.removePart(partId(1));
+
+        service.undo();
+
+        expect(names()).toEqual(['Instrument', 'Klavir', 'Violina']);
+      });
+    });
+
+    describe('renamePart', () => {
+      it('renames and trims', () => {
+        expect(service.renamePart(partId(1), '  Veliki klavir ')).toBeTrue();
+
+        expect(names()[1]).toBe('Veliki klavir');
+      });
+
+      it('refuses a blank name and an unknown id', () => {
+        expect(service.renamePart(partId(1), '   ')).toBeFalse();
+        expect(service.renamePart('nope', 'X')).toBeFalse();
+        expect(names()[1]).toBe('Klavir');
+      });
+
+      it('does not create an undo step when the name is unchanged', () => {
+        service.replaceDocument(service.document());
+
+        expect(service.renamePart(partId(1), 'Klavir')).toBeTrue();
+
+        expect(service.canUndo()).toBeFalse();
+      });
+
+      it('is undoable', () => {
+        service.renamePart(partId(1), 'Drugi');
+
+        service.undo();
+
+        expect(names()[1]).toBe('Klavir');
+      });
+    });
+
+    describe('movePart', () => {
+      it('moves an instrument down and up', () => {
+        expect(service.movePart(partId(0), 1)).toBeTrue();
+        expect(names()).toEqual(['Klavir', 'Instrument', 'Violina']);
+
+        expect(service.movePart(partId(2), -1)).toBeTrue();
+        expect(names()).toEqual(['Klavir', 'Violina', 'Instrument']);
+      });
+
+      it('refuses to move past either end', () => {
+        expect(service.movePart(partId(0), -1)).toBeFalse();
+        expect(service.movePart(partId(2), 1)).toBeFalse();
+        expect(service.movePart('nope', 1)).toBeFalse();
+        expect(names()).toEqual(['Instrument', 'Klavir', 'Violina']);
+      });
+
+      it('keeps the active staff and is undoable', () => {
+        service.movePart(partId(0), 1);
+        expect(service.activeStaffId()).toBe(trebleId);
+
+        service.undo();
+        expect(names()).toEqual(['Instrument', 'Klavir', 'Violina']);
+      });
     });
   });
 });

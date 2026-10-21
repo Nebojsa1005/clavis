@@ -1,0 +1,120 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--color-fg) 35%, transparent);
+}
+
+.dialog {
+  width: min(520px, calc(100vw - 2 * var(--space-3)));
+  max-height: 80vh;
+  overflow: auto;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  outline: none;
+
+  h2 {
+    margin: 0 0 var(--space-3);
+    font-size: 1rem;
+  }
+}
+
+button,
+input {
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+button {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--color-hover);
+  }
+
+  &.primary,
+  &.danger--armed {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+}
+
+.save-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+
+  label {
+    flex-basis: 100%;
+    font-size: 0.85rem;
+    color: var(--color-fg-muted);
+  }
+
+  input {
+    flex: 1;
+    min-width: 0;
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+}
+
+.entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+
+  &--current .entry__name {
+    color: var(--color-accent);
+  }
+}
+
+.entry__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entry__date {
+  font-size: 0.8rem;
+  color: var(--color-fg-muted);
+}
+
+.empty {
+  padding: var(--space-3) 0;
+  color: var(--color-fg-muted);
+  font-size: 0.85rem;
+}
+
+.error {
+  margin: var(--space-2) 0 0;
+  font-size: 0.85rem;
+  border-left: 2px solid var(--color-accent);
+  padding-left: var(--space-2);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-3);
+}

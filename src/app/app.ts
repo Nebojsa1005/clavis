@@ -1,15 +1,18 @@
 import { ChangeDetectionStrategy, Component, HostListener, computed, inject, signal } from '@angular/core';
-import { Clef, CLEFS, createEmptyScore, NoteDuration } from './core/models/score.model';
+import { Clef, CLEFS, NoteDuration } from './core/models/score.model';
 import { ExportService } from './core/services/export.service';
 import { PersistenceService } from './core/services/persistence.service';
 import { PlaybackService } from './core/services/playback.service';
 import { CaretService } from './core/state/caret.service';
 import { EditingService } from './core/state/editing.service';
 import { NoteInputService } from './core/state/note-input.service';
+import { ScoreSessionService } from './core/state/score-session.service';
 import { ScoreModelService } from './core/state/score-model.service';
 import { SelectionService } from './core/state/selection.service';
 import { KeySignatureControl } from './features/key-signature-control/key-signature-control';
+import { LibraryDialog, LibraryDialogMode } from './features/library-dialog/library-dialog';
 import { StaffView } from './features/staff-view/staff-view';
+import { TracksPanel } from './features/tracks-panel/tracks-panel';
 import { TimeSignatureControl } from './features/time-signature-control/time-signature-control';
 
 interface DurationOption {
@@ -35,13 +38,14 @@ const KEY_DURATION_MAP: Record<string, NoteDuration> = {
 
 @Component({
   selector: 'app-root',
-  imports: [KeySignatureControl, StaffView, TimeSignatureControl],
+  imports: [KeySignatureControl, LibraryDialog, StaffView, TimeSignatureControl, TracksPanel],
   templateUrl: './app.html',
   styleUrl: './app.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class App {
   protected readonly appName = signal('Clavis');
+  protected readonly dialogMode = signal<LibraryDialogMode | null>(null);
   protected readonly noteInput = inject(NoteInputService);
   protected readonly scoreModel = inject(ScoreModelService);
   protected readonly selection = inject(SelectionService);
@@ -50,6 +54,7 @@ export class App {
   protected readonly playback = inject(PlaybackService);
   private readonly exportService = inject(ExportService);
   private readonly persistence = inject(PersistenceService);
+  protected readonly session = inject(ScoreSessionService);
 
   protected readonly durationOptions: DurationOption[] = [
     { value: 'whole', key: '1', label: 'Cela' },
@@ -69,13 +74,8 @@ export class App {
   ];
 
   constructor() {
-    this.persistence
-      .loadScore()
-      .then((score) => {
-        if (score) {
-          this.scoreModel.replaceScore(score);
-        }
-      })
+    this.session
+      .restoreLast()
       .catch((error: unknown) => console.warn('Učitavanje sačuvane partiture nije uspelo:', error));
   }
 
@@ -124,7 +124,7 @@ export class App {
     if (this.playback.isPlaying()) {
       this.playback.stop();
     } else {
-      void this.playback.play(this.scoreModel.score());
+      void this.playback.play(this.scoreModel.document());
     }
   }
 
@@ -134,19 +134,32 @@ export class App {
   }
 
   protected onNew(): void {
-    if (!window.confirm('Započeti novu, praznu partituru? Nesačuvane izmene biće izgubljene.')) {
+    if (this.session.dirty() && !window.confirm('Započeti novu, praznu partituru? Nesačuvane izmene biće izgubljene.')) {
       return;
     }
-    this.scoreModel.replaceScore(createEmptyScore());
+    this.session.newScore();
     this.selection.clear();
   }
 
+  /** Saves into the open score; a score that was never saved first asks for a name. */
   protected onSave(): void {
-    void this.persistence.saveScore(this.scoreModel.score());
+    if (this.session.currentId() === null) {
+      this.dialogMode.set('saveAs');
+      return;
+    }
+    this.session.save().catch((error: unknown) => window.alert(`Čuvanje nije uspelo: ${String(error)}`));
+  }
+
+  protected onSaveAs(): void {
+    this.dialogMode.set('saveAs');
+  }
+
+  protected onOpen(): void {
+    this.dialogMode.set('open');
   }
 
   protected onExportJson(): void {
-    this.persistence.exportJsonFile(this.scoreModel.score());
+    this.persistence.exportJsonFile(this.scoreModel.document());
   }
 
   protected onImportJsonFile(event: Event): void {
@@ -160,7 +173,7 @@ export class App {
     this.persistence
       .importJsonFile(file)
       .then((score) => {
-        this.scoreModel.replaceScore(score);
+        this.session.adoptUnsaved(score, file.name.replace(/\.json$/i, '') || undefined);
         this.selection.clear();
       })
       .catch((error: unknown) => {
@@ -169,23 +182,33 @@ export class App {
   }
 
   protected onExportMusicXml(): void {
-    this.exportService.downloadMusicXml(this.scoreModel.score());
+    this.exportService.downloadMusicXml(this.scoreModel.document());
   }
 
   protected onExportMidi(): void {
-    this.exportService.downloadMidi(this.scoreModel.score(), this.playback.bpm());
+    this.exportService.downloadMidi(this.scoreModel.document(), this.playback.bpm());
   }
 
   protected onExportSvg(): void {
-    this.exportService.downloadSvg(this.scoreModel.score());
+    this.exportService.downloadSvg(this.scoreModel.document());
   }
 
   protected onExportPng(): void {
-    void this.exportService.downloadPng(this.scoreModel.score());
+    void this.exportService.downloadPng(this.scoreModel.document());
   }
 
   @HostListener('document:keydown', ['$event'])
   protected onKeydown(event: KeyboardEvent): void {
+    if (this.dialogMode() !== null) {
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+      this.onSave();
+      event.preventDefault();
+      return;
+    }
+
     // Typing in the tempo field or using a dropdown must not trigger editor shortcuts.
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) {

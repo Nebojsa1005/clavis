@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { createEmptyScore, createNote, createRest } from '../models/score.model';
+import { createPart } from '../models/score-document';
 import { ExportService } from './export.service';
 
 describe('ExportService', () => {
@@ -226,5 +227,138 @@ describe('ExportService', () => {
       expect(blob.type).toBe('image/png');
       expect(blob.size).toBeGreaterThan(0);
     });
+  });
+});
+
+describe('ExportService with several staves and instruments', () => {
+  let service: ExportService;
+
+  beforeEach(() => {
+    service = TestBed.inject(ExportService);
+  });
+
+  const piano = () => {
+    const treble = createEmptyScore('treble');
+    treble.measures[0].elements.push(createNote('C', 5, 'quarter'), createNote('D', 5, 'quarter'));
+    const bass = createEmptyScore('bass');
+    bass.measures[0].elements.push(createNote('C', 3, 'half'));
+    return { parts: [createPart('Klavir', [treble, bass])] };
+  };
+
+  describe('MusicXML', () => {
+    it('declares two staves and a numbered clef for each', () => {
+      const xml = service.toMusicXml(piano());
+
+      expect(xml).toContain('<staves>2</staves>');
+      expect(xml).toContain('<clef number="1"><sign>G</sign><line>2</line></clef>');
+      expect(xml).toContain('<clef number="2"><sign>F</sign><line>4</line></clef>');
+    });
+
+    it('writes the first staff, steps back by its length and writes the second staff', () => {
+      const xml = service.toMusicXml(piano());
+
+      const backup = xml.indexOf('<backup>');
+      expect(backup).toBeGreaterThan(xml.indexOf('<step>D</step>'));
+      expect(xml.slice(backup)).toContain('<duration>64</duration>\n      </backup>');
+      expect(xml.indexOf('<step>C</step>', backup)).toBeGreaterThan(backup);
+    });
+
+    it('marks every note with its staff number', () => {
+      const xml = service.toMusicXml(piano());
+
+      expect(xml.match(/<staff>1<\/staff>/g)?.length).toBe(2);
+      expect(xml.match(/<staff>2<\/staff>/g)?.length).toBe(1);
+    });
+
+    it('does not step back over an empty staff', () => {
+      const doc = piano();
+      doc.parts[0].staves[0].score.measures[0].elements = [];
+
+      expect(service.toMusicXml(doc)).not.toContain('<backup>');
+    });
+
+    it('keeps single-staff parts free of staff markup', () => {
+      const xml = service.toMusicXml(createEmptyScore());
+
+      expect(xml).not.toContain('<staves>');
+      expect(xml).not.toContain('<staff>');
+      expect(xml).not.toContain('<backup>');
+    });
+
+    it('writes one part per instrument with its name, escaped', () => {
+      const doc = piano();
+      doc.parts.push(createPart('Flauta & klavir <1>', [createEmptyScore()]));
+
+      const xml = service.toMusicXml(doc);
+
+      expect(xml).toContain('<score-part id="P1"><part-name>Klavir</part-name></score-part>');
+      expect(xml).toContain('<score-part id="P2"><part-name>Flauta &amp; klavir &lt;1&gt;</part-name></score-part>');
+      expect(xml).toContain('<part id="P1">');
+      expect(xml).toContain('<part id="P2">');
+    });
+
+    it('pairs ties inside each staff of the document', () => {
+      const doc = piano();
+      const bassNotes = doc.parts[0].staves[1].score.measures[0].elements;
+      bassNotes.splice(0, 1, { ...createNote('C', 3, 'quarter'), tieToNext: true }, createNote('C', 3, 'quarter'));
+
+      const xml = service.toMusicXml(doc);
+
+      expect(xml.match(/<tie type="start"\/>/g)?.length).toBe(1);
+      expect(xml.match(/<tie type="stop"\/>/g)?.length).toBe(1);
+    });
+  });
+
+  describe('MIDI', () => {
+    const trackCount = (bytes: Uint8Array) => (bytes[10] << 8) | bytes[11];
+
+    it('writes one track per staff', () => {
+      expect(trackCount(service.toMidi(piano()))).toBe(2);
+
+      const doc = piano();
+      doc.parts.push(createPart('Violina', [createEmptyScore()]));
+      expect(trackCount(service.toMidi(doc))).toBe(3);
+    });
+
+    it('writes a single track for a plain score', () => {
+      expect(trackCount(service.toMidi(createEmptyScore()))).toBe(1);
+    });
+  });
+
+  describe('an orchestra-sized score', () => {
+    // piano (2 staves) + violin + viola + cello + flute = 6 staves in 5 instruments
+    const orchestra = () => {
+      const doc = piano();
+      for (const clef of ['treble', 'alto', 'bass', 'treble'] as const) {
+        const score = createEmptyScore(clef);
+        score.measures[0].elements.push(createNote('C', 4, 'quarter'));
+        doc.parts.push(createPart(`Deonica ${doc.parts.length + 1}`, [score]));
+      }
+      return doc;
+    };
+
+    it('writes a MusicXML part for every instrument', () => {
+      const xml = service.toMusicXml(orchestra());
+
+      expect(xml.match(/<part id="P\d+">/g)?.length).toBe(5);
+      expect(xml.match(/<score-part /g)?.length).toBe(5);
+      expect(xml).toContain('<clef><sign>C</sign><line>3</line></clef>');
+    });
+
+    it('writes a MIDI track for every staff', () => {
+      const bytes = service.toMidi(orchestra());
+
+      expect((bytes[10] << 8) | bytes[11]).toBe(6);
+    });
+
+    it('draws a stave for every staff', () => {
+      expect(service.toSvgString(orchestra()).match(/class="vf-stave"/g)?.length).toBe(6);
+    });
+  });
+
+  it('draws every staff into the SVG', () => {
+    const svg = service.toSvgString(piano());
+
+    expect(svg.match(/class="vf-stave"/g)?.length).toBe(2);
   });
 });

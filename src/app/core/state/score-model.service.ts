@@ -14,6 +14,7 @@ import {
 import { durationToBeats, stepDiatonic } from '../models/notation.util';
 import { Clef, createMeasure, createTestScore, MeasureElement, Score, TimeSignature } from '../models/score.model';
 import { isKeySignature } from '../models/key-signature.util';
+import { BeamMode, setBeamMode } from '../models/beam.util';
 import { setTieFlag, tieNoteBefore } from '../models/tie.util';
 import { validateTimeSignature } from '../models/time-signature.util';
 
@@ -208,6 +209,14 @@ export class ScoreModelService {
    */
   setTies(ids: readonly string[], tied: boolean): void {
     this.mutate((score) => setTieFlag(score, new Set(ids), tied));
+  }
+
+  /**
+   * Sets how each given note is beamed to the note after it ('on' = always, 'off' = never) or
+   * hands it back to automatic beaming with `null`. One undo step.
+   */
+  setBeams(ids: readonly string[], mode: BeamMode | null): void {
+    this.mutate((score) => setBeamMode(score, new Set(ids), mode));
   }
 
   /** Inserts several elements in order as ONE undo step; see `insertManyWithReflow`. */

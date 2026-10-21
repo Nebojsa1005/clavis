@@ -1,4 +1,5 @@
 import { createId, createMeasure, isScore, Score } from './score.model';
+import { sanitizeBeams } from './beam.util';
 import { sanitizeTies } from './tie.util';
 
 /**
@@ -139,7 +140,7 @@ export function normalizeDocument(doc: ScoreDocument): ScoreDocument {
 
   let changed = false;
   const next = mapStaffScores(doc, (score) => {
-    let result = sanitizeTies(score);
+    let result = sanitizeBeams(sanitizeTies(score));
     const sameSignatures =
       result.timeSignature.numerator === reference.timeSignature.numerator &&
       result.timeSignature.denominator === reference.timeSignature.denominator &&

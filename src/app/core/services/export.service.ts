@@ -5,6 +5,7 @@ import { effectiveAccidental, findKeySignature } from '../models/key-signature.u
 import { toToneNoteName } from '../models/notation.util';
 import { AccidentalValue, MeasureElement, NoteDuration, Score } from '../models/score.model';
 import { allStaves, asDocument, Part, ScoreDocument } from '../models/score-document';
+import { beamGroups, beamLevels } from '../models/beam.util';
 import { tieLinks, tiedTargetIds } from '../models/tie.util';
 import { triggerDownload } from '../utils/download.util';
 import { NotationRendererService } from './notation-renderer.service';
@@ -18,10 +19,41 @@ function divisionsOf(elements: readonly MeasureElement[]): number {
   return elements.reduce((sum, element) => sum + (elementTicks(element) * MUSICXML_DIVISIONS * 4) / TICKS_PER_WHOLE, 0);
 }
 
-/** Ids of notes where a tie starts / stops, for MusicXML. */
-interface TieSets {
+/** A beam level of one note in MusicXML terms, e.g. { number: 1, state: 'begin' }. */
+interface BeamMark {
+  number: number;
+  state: 'begin' | 'continue' | 'end' | 'forward hook' | 'backward hook';
+}
+
+/** What MusicXML needs to know about notes beyond their own data: ties and beams, by note id. */
+interface NoteMarks {
   starts: Set<string>;
   stops: Set<string>;
+  beams: Map<string, BeamMark[]>;
+}
+
+/**
+ * Beam marks for every beamed note of a staff. Each level of a note continues, begins or ends a
+ * beam depending on whether its neighbours carry that level too; a level shared with no
+ * neighbour is a short hook.
+ */
+function beamMarks(score: Score): Map<string, BeamMark[]> {
+  const marks = new Map<string, BeamMark[]>();
+  for (const measure of score.measures) {
+    for (const group of beamGroups(measure, score.timeSignature)) {
+      group.forEach((note, index) => {
+        const levels: BeamMark[] = [];
+        for (let level = 1; level <= beamLevels(note); level++) {
+          const before = index > 0 && beamLevels(group[index - 1]) >= level;
+          const after = index < group.length - 1 && beamLevels(group[index + 1]) >= level;
+          const state = before && after ? 'continue' : before ? 'end' : after ? 'begin' : index > 0 ? 'backward hook' : 'forward hook';
+          levels.push({ number: level, state });
+        }
+        marks.set(note.id, levels);
+      });
+    }
+  }
+  return marks;
 }
 
 /** MusicXML "divisions" per quarter note; 32 keeps even a dotted 64th (3 divisions) an integer. */
@@ -77,7 +109,11 @@ export class ExportService {
 
     // Ties are looked up by note id, and ids are unique across the whole document.
     const links = refs.flatMap((ref) => tieLinks(ref.staff.score));
-    const ties: TieSets = { starts: new Set(links.map((link) => link.from.id)), stops: tiedTargetIds(links) };
+    const beams = new Map<string, BeamMark[]>();
+    for (const ref of refs) {
+      beamMarks(ref.staff.score).forEach((marks, id) => beams.set(id, marks));
+    }
+    const ties: NoteMarks = { starts: new Set(links.map((link) => link.from.id)), stops: tiedTargetIds(links), beams };
 
     const partList = doc.parts.map(
       (part, index) => `    <score-part id="P${index + 1}"><part-name>${escapeXml(part.name)}</part-name></score-part>`,
@@ -199,7 +235,7 @@ export class ExportService {
     triggerDownload(await this.toPngBlob(score), filename);
   }
 
-  private partToXml(part: Part, partIndex: number, key: { fifths: number; mode: 'major' | 'minor' }, ties: TieSets): string {
+  private partToXml(part: Part, partIndex: number, key: { fifths: number; mode: 'major' | 'minor' }, ties: NoteMarks): string {
     const staves = part.staves;
     const multiStaff = staves.length > 1;
     const reference = staves[0].score;
@@ -246,7 +282,7 @@ ${staves}${clefs}
       </attributes>\n`;
   }
 
-  private elementToXml(element: MeasureElement, keySignature: string, ties: TieSets, staffNumber?: number): string {
+  private elementToXml(element: MeasureElement, keySignature: string, ties: NoteMarks, staffNumber?: number): string {
     const duration = (elementTicks(element) * MUSICXML_DIVISIONS * 4) / TICKS_PER_WHOLE;
     const type = MUSICXML_TYPE[element.duration];
     const dotXml = element.dotted ? '\n        <dot/>' : '';
@@ -268,6 +304,9 @@ ${staves}${clefs}
     // <tie> is the sounding connection (before <type>); <tied> is the engraved arc (in <notations>).
     const stops = ties.stops.has(element.id);
     const starts = ties.starts.has(element.id);
+    const beamXml = (ties.beams.get(element.id) ?? [])
+      .map((beam) => `\n        <beam number="${beam.number}">${beam.state}</beam>`)
+      .join('');
     const tieXml = (stops ? '\n        <tie type="stop"/>' : '') + (starts ? '\n        <tie type="start"/>' : '');
     const tiedXml =
       stops || starts
@@ -281,7 +320,7 @@ ${staves}${clefs}
       `          <octave>${element.pitch.octave}</octave>`,
       '        </pitch>',
       `        <duration>${duration}</duration>${tieXml}`,
-      `        <type>${type}</type>${dotXml}${accidentalXml}${staffXml}${tiedXml}`,
+      `        <type>${type}</type>${dotXml}${accidentalXml}${staffXml}${beamXml}${tiedXml}`,
       '      </note>',
     ].join('\n');
   }

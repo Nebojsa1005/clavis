@@ -1,4 +1,5 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, computed, inject } from '@angular/core';
+import { beamedToNextIds, isBeamable } from '../models/beam.util';
 import { positionBeforeElement } from '../models/caret.util';
 import { canTie } from '../models/tie.util';
 import { MeasureElement, Note } from '../models/score.model';
@@ -70,6 +71,66 @@ export class EditingService {
       candidates.map((note) => note.id),
       !allTied,
     );
+  }
+
+  /** True while any selected note is beamed to the note after it (as drawn, automatic or manual). */
+  readonly selectionBeamed = computed(() => {
+    const beamed = beamedToNextIds(this.scoreModel.score());
+    return this.selection.selectedIds().some((id) => beamed.has(id));
+  });
+
+  /**
+   * Joins or separates beams (B). One selected note is joined to the note after it; several
+   * selected notes are joined to each other. If every possible join is already beamed they are
+   * separated instead, otherwise all of them are joined, also across beats. Only eighths and
+   * shorter notes next to each other in one measure can be joined; other pairs are skipped.
+   */
+  toggleBeam(): void {
+    const selected = this.selection.selectedElements();
+    if (selected.length === 0) {
+      return;
+    }
+    const score = this.scoreModel.score();
+    const selectedIds = new Set(selected.map((element) => element.id));
+
+    const candidates = selected.filter((element) => {
+      if (!isBeamable(element)) {
+        return false;
+      }
+      const next = this.nextInMeasure(element.id);
+      return isBeamable(next) && (selected.length < 2 || selectedIds.has(next.id));
+    });
+    if (candidates.length === 0) {
+      return;
+    }
+
+    const beamed = beamedToNextIds(score);
+    const allBeamed = candidates.every((note) => beamed.has(note.id));
+    this.scoreModel.setBeams(
+      candidates.map((note) => note.id),
+      allBeamed ? 'off' : 'on',
+    );
+  }
+
+  /** Hands the selected notes back to automatic beaming (Shift+B). Does nothing if none was set by hand. */
+  resetBeams(): void {
+    const manual = this.selection.selectedElements().filter((element) => element.kind === 'note' && element.beamToNext);
+    if (manual.length > 0) {
+      this.scoreModel.setBeams(
+        manual.map((note) => note.id),
+        null,
+      );
+    }
+  }
+
+  private nextInMeasure(id: string): MeasureElement | undefined {
+    for (const measure of this.scoreModel.score().measures) {
+      const index = measure.elements.findIndex((element) => element.id === id);
+      if (index !== -1) {
+        return measure.elements[index + 1];
+      }
+    }
+    return undefined;
   }
 
   /** Returns false when nothing is selected. */

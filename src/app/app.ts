@@ -97,6 +97,16 @@ export class App {
     this.editing.toggleTie();
   }
 
+  protected readonly beamActive = this.editing.selectionBeamed;
+
+  protected onToggleBeam(): void {
+    this.editing.toggleBeam();
+  }
+
+  protected onResetBeams(): void {
+    this.editing.resetBeams();
+  }
+
   protected onToggleDotted(): void {
     this.noteInput.toggleDotted();
   }
@@ -229,6 +239,16 @@ export class App {
 
     if (event.ctrlKey && event.key.toLowerCase() === 'y') {
       this.onRedo();
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key.toLowerCase() === 'b' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      if (event.shiftKey) {
+        this.editing.resetBeams();
+      } else {
+        this.editing.toggleBeam();
+      }
       event.preventDefault();
       return;
     }

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import {
   Accidental,
+  Beam,
   Dot,
   Formatter,
   Renderer,
@@ -10,6 +11,7 @@ import {
   StaveTie,
   Voice,
 } from 'vexflow';
+import { beamGroups } from '../models/beam.util';
 import { CaretPosition, elementBoundaries } from '../models/caret.util';
 import { Measure, MeasureElement, NoteDuration, Score } from '../models/score.model';
 import { allStaves, asDocument, documentMeasureCount, ScoreDocument, StaffRef } from '../models/score-document';
@@ -283,6 +285,19 @@ export class NotationRendererService {
       return { ref, stave: staves[index], notes, measure };
     });
 
+    // Beams have to exist before the notes are formatted and drawn: they take over the flags and
+    // decide the stem direction of the whole group.
+    const beams = columnStaves.flatMap((entry) => {
+      const noteById = new Map(entry.measure.elements.map((el, index) => [el.id, entry.notes[index]]));
+      return beamGroups(entry.measure, entry.ref.staff.score.timeSignature).map((group) => {
+        const beam = new Beam(group.map((note) => noteById.get(note.id)!), true);
+        if (group.every((note) => selectedIds.has(note.id))) {
+          beam.setStyle({ fillStyle: SELECTED_NOTE_COLOR, strokeStyle: SELECTED_NOTE_COLOR });
+        }
+        return beam;
+      });
+    });
+
     const formatter = new Formatter();
     const voices = columnStaves
       .filter((entry) => entry.notes.length > 0)
@@ -298,6 +313,7 @@ export class NotationRendererService {
       formatter.format(voices.map((item) => item.voice), STAVE_WIDTH - 50);
     }
     voices.forEach(({ entry, voice }) => voice.draw(context, entry.stave));
+    beams.forEach((beam) => beam.setContext(context).draw());
 
     for (const entry of columnStaves) {
       this.recordLayout(entry, x);

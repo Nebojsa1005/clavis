@@ -90,6 +90,16 @@ i iscrta SVG od nule (nema inkrementalnog diff-a — za ovaj obim je to brzo i j
 praćenja VexFlow internog stanja). Klik na notu radi preko `data-score-element-id` i
 `data-score-staff-id` atributa koje renderer upiše na SVG elemente.
 
+### Grede i vratovi
+
+Smer vrata se bira po položaju na štapu: ispod srednje linije nagore (desno od glave), od srednje
+linije naviše nadole (levo), a srednja linija zavisi od ključa. Note od osminke naniže se
+**automatski spajaju gredom po otkucaju** (`beam.util.ts`): u 4/4 i 3/4 po četvrtini, u 2/2 po
+polovini, u složenim taktovima (3/8, 6/8, 9/8, 12/8) po tri osmine. Pauza, duža nota i crta takta
+prekidaju grupu. Ručno: `B` spaja ili razdvaja selektovane note (jedna nota se spaja sa sledećom),
+`Shift+B` vraća automatsko grupisanje. Ručna postavka se čuva na noti (`beamToNext`) i briše se
+sama kad prestane da ima smisla (npr. posle brisanja susedne note).
+
 ### Plejbek
 
 `buildDocumentSchedule` pravi raspored svih štapova u **otkucajima** (tempo nezavisno). Otkucaj je

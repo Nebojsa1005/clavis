@@ -660,6 +660,125 @@ describe('Caret editing (integration)', () => {
     });
   });
 
+  describe('beams', () => {
+    const beams = () => host().querySelectorAll('.vf-beam').length;
+    const flagsDrawn = () => host().querySelectorAll('.vf-flag').length;
+    const eighths = (count: number): MeasureElement[] =>
+      Array.from({ length: count }, (_, index) => createNote(['C', 'D', 'E', 'F', 'G', 'A', 'B', 'C'][index] as Step, 4, 'eighth'));
+    const clickNode = (index: number, modifiers: MouseEventInit = {}) => {
+      host().querySelectorAll('[data-score-element-id]')[index].dispatchEvent(
+        new MouseEvent('click', { bubbles: true, ...modifiers }),
+      );
+      fixture.detectChanges();
+    };
+
+    it('beams eighths by the beat without any action', () => {
+      setup(eighths(4));
+
+      expect(beams()).toBe(2);
+      expect(flagsDrawn()).toBe(0);
+    });
+
+    it('joins two eighths from different beats with B', () => {
+      setup(eighths(4));
+      clickNode(1);
+      clickNode(2, { shiftKey: true });
+
+      press('b');
+
+      expect(beams()).toBe(1);
+    });
+
+    it('separates an automatically beamed pair with B and brings the flags back', () => {
+      setup(eighths(4));
+      clickNode(0);
+      clickNode(1, { shiftKey: true });
+
+      press('b');
+
+      expect(beams()).toBe(1);
+      expect(flagsDrawn()).toBe(2);
+    });
+
+    it('goes back to automatic beaming with Shift+B', () => {
+      setup(eighths(4));
+      clickNode(1);
+      clickNode(2, { shiftKey: true });
+      press('b');
+      expect(beams()).toBe(1);
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'B', shiftKey: true }));
+      fixture.detectChanges();
+
+      expect(beams()).toBe(2);
+    });
+
+    it('beams new eighths as they are typed in note input mode', () => {
+      setup([]);
+      press('n');
+      press('4');
+      const { topLineY } = renderer.getStaffGeometry();
+      for (let i = 0; i < 2; i++) {
+        clickAt(caretX(), topLineY);
+      }
+
+      expect(beams()).toBe(1);
+    });
+
+    it('lights up the beam button while a beamed note is selected', () => {
+      setup(eighths(4));
+      clickNode(0);
+      const button = fixture.nativeElement.querySelector('button[title^="Spoji ili razdvoji"]') as HTMLButtonElement;
+      expect(button.getAttribute('aria-pressed')).toBe('true');
+
+      clickNode(1);
+      expect(button.getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('works from the buttons too', () => {
+      setup(eighths(4));
+      clickNode(1);
+      clickNode(2, { shiftKey: true });
+
+      (fixture.nativeElement.querySelector('button[title^="Spoji ili razdvoji"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(beams()).toBe(1);
+
+      (fixture.nativeElement.querySelector('button[title^="Greda automatski"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(beams()).toBe(2);
+    });
+
+    it('is undone with Ctrl+Z', () => {
+      setup(eighths(4));
+      clickNode(1);
+      clickNode(2, { shiftKey: true });
+      press('b');
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }));
+      fixture.detectChanges();
+
+      expect(beams()).toBe(2);
+    });
+
+    it('beams a pasted run of eighths', () => {
+      setup(eighths(2), []);
+      clickNode(0);
+      clickNode(1, { shiftKey: true });
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }));
+      selection().clear();
+      caret.setPosition({ measureIndex: 1, voice: 0, tick: 0 });
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true }));
+      fixture.detectChanges();
+
+      expect(beams()).toBe(2);
+    });
+
+    function selection(): SelectionService {
+      return TestBed.inject(SelectionService);
+    }
+  });
+
   describe('range operations', () => {
     let selection: SelectionService;
 

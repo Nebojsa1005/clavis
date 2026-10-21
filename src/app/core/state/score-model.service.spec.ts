@@ -875,4 +875,76 @@ describe('ScoreModelService', () => {
       });
     });
   });
+
+  describe('beams', () => {
+    const eighthsInOneMeasure = (count: number) => {
+      service.replaceScore(createEmptyScore());
+      for (let i = 0; i < count; i++) {
+        service.appendElement(createNote('C', 4, 'eighth'));
+      }
+      return service.score().measures[0].elements.map((el) => el.id);
+    };
+    const flags = () =>
+      service.score().measures.flatMap((m) => m.elements.map((el) => (el.kind === 'note' ? (el.beamToNext ?? '-') : 'r')));
+
+    it('sets a manual mode and clears it again', () => {
+      const ids = eighthsInOneMeasure(4);
+
+      service.setBeams([ids[1]], 'on');
+      expect(flags()).toEqual(['-', 'on', '-', '-']);
+
+      service.setBeams([ids[1]], null);
+      expect(flags()).toEqual(['-', '-', '-', '-']);
+    });
+
+    it('is one undo step', () => {
+      const ids = eighthsInOneMeasure(4);
+
+      service.setBeams([ids[0], ids[1], ids[2]], 'off');
+      service.undo();
+
+      expect(flags()).toEqual(['-', '-', '-', '-']);
+    });
+
+    it('is dropped when a quarter is inserted after the flagged note', () => {
+      const ids = eighthsInOneMeasure(2);
+      service.setBeams([ids[0]], 'on');
+
+      service.insertElement(0, 1, createNote('D', 4, 'quarter'));
+
+      expect(flags()).toEqual(['-', '-', '-']);
+    });
+
+    it('survives an insert that keeps the pair together', () => {
+      const ids = eighthsInOneMeasure(2);
+      service.setBeams([ids[0]], 'on');
+
+      service.insertElement(0, 0, createNote('D', 4, 'quarter'));
+
+      expect(flags()).toEqual(['-', 'on', '-']);
+    });
+
+    it('is dropped when the next note is deleted and the one after it cannot be beamed', () => {
+      service.replaceScore(createEmptyScore());
+      service.appendElement(createNote('C', 4, 'eighth'));
+      service.appendElement(createNote('D', 4, 'eighth'));
+      service.appendElement(createNote('E', 4, 'quarter'));
+      const [first, second] = service.score().measures[0].elements;
+      service.setBeams([first.id], 'on');
+
+      service.deleteElement(second.id);
+
+      expect(flags()).toEqual(['-', '-']);
+    });
+
+    it('keeps the setting of a copied and pasted pair', () => {
+      const ids = eighthsInOneMeasure(2);
+      service.setBeams([ids[0]], 'off');
+      const pair = service.score().measures[0].elements.map((el) => ({ ...el, id: crypto.randomUUID() }));
+
+      service.insertElements(0, 2, pair);
+
+      expect(flags()).toEqual(['off', '-', 'off', '-']);
+    });
+  });
 });

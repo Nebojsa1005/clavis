@@ -1,6 +1,17 @@
 import { TestBed } from '@angular/core/testing';
 import { KEY_SIGNATURE_OPTIONS } from '../models/key-signature.util';
-import { Clef, CLEFS, createEmptyScore, createMeasure, createNote, createRest, NoteDuration, Step } from '../models/score.model';
+import {
+  Clef,
+  CLEFS,
+  createEmptyScore,
+  createMeasure,
+  createNote,
+  createRest,
+  MeasureElement,
+  NoteDuration,
+  Score,
+  Step,
+} from '../models/score.model';
 import { createPart } from '../models/score-document';
 import { NotationRendererService, CARET_CLASS, SCORE_ELEMENT_ID_ATTR, SCORE_STAFF_ID_ATTR } from './notation-renderer.service';
 
@@ -542,6 +553,115 @@ describe('NotationRendererService', () => {
       };
       expect(sideOf(low)).toBe('right');
       expect(sideOf(high)).toBe('left');
+    });
+  });
+
+  describe('beams', () => {
+    const counts = (score: Score) => {
+      service.render(container, score);
+      return {
+        beams: container.querySelectorAll('.vf-beam').length,
+        flags: container.querySelectorAll('.vf-flag').length,
+      };
+    };
+    const withElements = (...elements: MeasureElement[]): Score => ({
+      ...createEmptyScore(),
+      measures: [createMeasure(elements)],
+    });
+    const eighth = (step: Step = 'C', beamToNext?: 'on' | 'off') => ({
+      ...createNote(step, 4, 'eighth'),
+      ...(beamToNext ? { beamToNext } : {}),
+    });
+
+    it('draws one beam per beat for eighths, and no flags on beamed notes', () => {
+      expect(counts(withElements(eighth(), eighth(), eighth(), eighth()))).toEqual({ beams: 2, flags: 0 });
+    });
+
+    it('keeps the flag on an eighth that has nobody to be beamed with', () => {
+      expect(counts(withElements(eighth(), eighth(), eighth()))).toEqual({ beams: 1, flags: 1 });
+      expect(counts(withElements(eighth(), createRest('eighth')))).toEqual({ beams: 0, flags: 1 });
+    });
+
+    it('draws a single beam for a run of sixteenths', () => {
+      const sixteenths = Array.from({ length: 4 }, () => createNote('C', 4, 'sixteenth'));
+
+      expect(counts(withElements(...sixteenths)).beams).toBe(1);
+    });
+
+    it('does not beam quarters and longer notes', () => {
+      expect(counts(withElements(createNote('C', 4, 'quarter'), createNote('D', 4, 'half')))).toEqual({ beams: 0, flags: 0 });
+    });
+
+    it('does not beam across a rest', () => {
+      expect(counts(withElements(eighth(), createRest('eighth'), eighth(), createRest('eighth')))).toEqual({ beams: 0, flags: 2 });
+    });
+
+    it('follows a manual "off": the flags come back', () => {
+      expect(counts(withElements(eighth('C', 'off'), eighth(), eighth(), eighth()))).toEqual({ beams: 1, flags: 2 });
+    });
+
+    it('follows a manual "on": notes in different beats share a beam', () => {
+      expect(counts(withElements(eighth('C'), eighth('D', 'on'), eighth('E'), eighth('F')))).toEqual({ beams: 1, flags: 0 });
+    });
+
+    it('uses beats of three eighths in 6/8', () => {
+      const score = { ...withElements(...Array.from({ length: 6 }, () => eighth())), timeSignature: { numerator: 6, denominator: 8 } };
+
+      expect(counts(score)).toEqual({ beams: 2, flags: 0 });
+    });
+
+    it('beams within each measure and never across the barline', () => {
+      const score = {
+        ...createEmptyScore(),
+        measures: [
+          createMeasure([createNote('C', 4, 'half'), createNote('D', 4, 'quarter'), eighth()]),
+          createMeasure([eighth(), createNote('E', 4, 'quarter')]),
+        ],
+      };
+
+      expect(counts(score)).toEqual({ beams: 0, flags: 2 });
+    });
+
+    it('gives all notes of a beam the same stem direction', () => {
+      const score = withElements(
+        { ...createNote('C', 4, 'eighth') },
+        { ...createNote('A', 5, 'eighth') },
+      );
+      service.render(container, score);
+
+      // with a beam the stems are drawn next to the notes, not inside them, so pair them by order
+      const stems = Array.from(container.querySelectorAll('.vf-stem'));
+      const heads = Array.from(container.querySelectorAll('.vf-notehead'));
+      const directions = stems.map((stemEl, index) => {
+        const stem = stemEl.getBoundingClientRect();
+        const head = heads[index].getBoundingClientRect();
+        return stem.top + stem.bottom < head.top + head.bottom ? 'up' : 'down';
+      });
+
+      expect(stems.length).toBe(2);
+      expect(container.querySelectorAll('.vf-beam').length).toBe(1);
+      expect(new Set(directions).size).toBe(1);
+    });
+
+    it('beams every staff of a grand staff on its own', () => {
+      const treble = withElements(eighth(), eighth());
+      const bass = { ...createEmptyScore('bass'), measures: [createMeasure([eighth(), eighth(), eighth(), eighth()])] };
+
+      service.render(container, { parts: [createPart('Klavir', [treble, bass])] });
+
+      expect(container.querySelectorAll('.vf-beam').length).toBe(3);
+    });
+
+    it('colors a beam whose notes are all selected', () => {
+      const [a, b, c, d] = [eighth(), eighth(), eighth(), eighth()];
+      const score = withElements(a, b, c, d);
+
+      service.render(container, score, new Set([a.id, b.id]));
+
+      const beams = Array.from(container.querySelectorAll('.vf-beam'));
+      const colored = beams.filter((beam) => beam.querySelector('[fill="#3b5bfd"]') || beam.getAttribute('fill') === '#3b5bfd');
+      expect(beams.length).toBe(2);
+      expect(colored.length).toBe(1);
     });
   });
 });

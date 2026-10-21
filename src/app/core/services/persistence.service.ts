@@ -1,15 +1,17 @@
 import { Injectable } from '@angular/core';
-import { isScore, Score } from '../models/score.model';
+import { Score } from '../models/score.model';
+import { asDocument, ScoreDocument, toDocument } from '../models/score-document';
 import { triggerDownload } from '../utils/download.util';
 
-/** JSON file export/import of the internal score format. Browser storage lives in ScoreLibraryService. */
+/** JSON file export/import of the internal format. Browser storage lives in ScoreLibraryService. */
 @Injectable({ providedIn: 'root' })
 export class PersistenceService {
-  exportJsonFile(score: Score, filename = 'partitura.json'): void {
-    triggerDownload(new Blob([JSON.stringify(score, null, 2)], { type: 'application/json' }), filename);
+  exportJsonFile(input: Score | ScoreDocument, filename = 'partitura.json'): void {
+    triggerDownload(new Blob([JSON.stringify(asDocument(input), null, 2)], { type: 'application/json' }), filename);
   }
 
-  async importJsonFile(file: File): Promise<Score> {
+  /** Reads a document, or a score exported by an older version (a single staff). */
+  async importJsonFile(file: File): Promise<ScoreDocument> {
     const text = await file.text();
     let parsed: unknown;
     try {
@@ -17,9 +19,10 @@ export class PersistenceService {
     } catch {
       throw new Error('Fajl nije valjan JSON.');
     }
-    if (!isScore(parsed)) {
+    const document = toDocument(parsed);
+    if (!document) {
       throw new Error('Fajl ne sadrži validnu Clavis partituru.');
     }
-    return parsed;
+    return document;
   }
 }

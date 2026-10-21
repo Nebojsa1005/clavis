@@ -1,5 +1,6 @@
 import { Injectable, InjectionToken, inject } from '@angular/core';
-import { isScore, Score } from '../models/score.model';
+import { isScore } from '../models/score.model';
+import { ScoreDocument, toDocument } from '../models/score-document';
 
 /** Name of the IndexedDB database; tests provide a unique one per test so they never share data. */
 export const LIBRARY_DB_NAME = new InjectionToken<string>('LIBRARY_DB_NAME', {
@@ -13,7 +14,9 @@ const LIBRARY_STORE = 'library';
 const LEGACY_STORE = 'scores';
 const LEGACY_KEY = 'current';
 /** Version of the record layout, for future migrations of what is stored under `data`. */
-const RECORD_FORMAT = 1;
+const RECORD_FORMAT = 2;
+/** Records of format 1 hold a single-staff Score; they are read as a one-instrument document. */
+const LEGACY_RECORD_FORMAT = 1;
 
 export const DEFAULT_SCORE_NAME = 'Moja partitura';
 
@@ -26,7 +29,7 @@ export interface SavedScoreMeta {
 }
 
 export interface SavedScore extends SavedScoreMeta {
-  score: Score;
+  document: ScoreDocument;
 }
 
 interface StoredRecord extends SavedScoreMeta {
@@ -57,20 +60,21 @@ export class ScoreLibraryService {
 
   async get(id: string): Promise<SavedScore | null> {
     const record = await this.request<StoredRecord | undefined>('readonly', (store) => store.get(id));
-    if (!record || !isScore(record.data)) {
+    const document = record ? toDocument(record.data) : null;
+    if (!record || !document) {
       return null;
     }
-    return { id: record.id, name: record.name, modified: record.modified, score: record.data };
+    return { id: record.id, name: record.name, modified: record.modified, document };
   }
 
   /** Creates a new entry when `id` is omitted, otherwise overwrites that entry. */
-  async save(input: { id?: string; name: string; score: Score }): Promise<SavedScoreMeta> {
+  async save(input: { id?: string; name: string; document: ScoreDocument }): Promise<SavedScoreMeta> {
     const meta: SavedScoreMeta = {
       id: input.id ?? crypto.randomUUID(),
       name: cleanName(input.name),
       modified: Date.now(),
     };
-    const record: StoredRecord = { ...meta, format: RECORD_FORMAT, data: input.score };
+    const record: StoredRecord = { ...meta, format: RECORD_FORMAT, data: input.document };
     await this.request('readwrite', (store) => store.put(record));
     return meta;
   }
@@ -124,7 +128,7 @@ export class ScoreLibraryService {
           id: crypto.randomUUID(),
           name: DEFAULT_SCORE_NAME,
           modified: Date.now(),
-          format: RECORD_FORMAT,
+          format: LEGACY_RECORD_FORMAT,
           data: legacy.result,
         };
         tx.objectStore(LIBRARY_STORE).put(record);

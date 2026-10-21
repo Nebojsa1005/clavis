@@ -3,10 +3,20 @@ import MidiWriter from 'midi-writer-js';
 import { elementTicks, TICKS_PER_WHOLE } from '../models/caret.util';
 import { effectiveAccidental, findKeySignature } from '../models/key-signature.util';
 import { toToneNoteName } from '../models/notation.util';
-import { AccidentalValue, Measure, MeasureElement, NoteDuration, Score } from '../models/score.model';
+import { AccidentalValue, MeasureElement, NoteDuration, Score } from '../models/score.model';
+import { allStaves, asDocument, Part, ScoreDocument } from '../models/score-document';
 import { tieLinks, tiedTargetIds } from '../models/tie.util';
 import { triggerDownload } from '../utils/download.util';
 import { NotationRendererService } from './notation-renderer.service';
+
+function escapeXml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Length of a run of elements in MusicXML divisions, as needed by <backup>. */
+function divisionsOf(elements: readonly MeasureElement[]): number {
+  return elements.reduce((sum, element) => sum + (elementTicks(element) * MUSICXML_DIVISIONS * 4) / TICKS_PER_WHOLE, 0);
+}
 
 /** Ids of notes where a tie starts / stops, for MusicXML. */
 interface TieSets {
@@ -59,32 +69,43 @@ const MIDI_DURATION_TOKEN: Record<NoteDuration, string> = {
 export class ExportService {
   private readonly notationRenderer = inject(NotationRendererService);
 
-  toMusicXml(score: Score): string {
-    const clef = MUSICXML_CLEF[score.clef];
-    const key = findKeySignature(score.keySignature) ?? { fifths: 0, mode: 'major' as const };
-    const links = tieLinks(score);
+  toMusicXml(input: Score | ScoreDocument): string {
+    const doc = asDocument(input);
+    const refs = allStaves(doc);
+    const reference = refs[0].staff.score;
+    const key = findKeySignature(reference.keySignature) ?? { fifths: 0, mode: 'major' as const };
+
+    // Ties are looked up by note id, and ids are unique across the whole document.
+    const links = refs.flatMap((ref) => tieLinks(ref.staff.score));
     const ties: TieSets = { starts: new Set(links.map((link) => link.from.id)), stops: tiedTargetIds(links) };
-    const measuresXml = score.measures
-      .map((measure, index) => this.measureToXml(measure, score, index, clef, key, ties))
-      .join('\n');
+
+    const partList = doc.parts.map(
+      (part, index) => `    <score-part id="P${index + 1}"><part-name>${escapeXml(part.name)}</part-name></score-part>`,
+    );
+    const partsXml = doc.parts.map((part, index) => this.partToXml(part, index, key, ties));
 
     return [
       '<?xml version="1.0" encoding="UTF-8"?>',
       '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">',
       '<score-partwise version="4.0">',
       '  <part-list>',
-      '    <score-part id="P1"><part-name>Clavis</part-name></score-part>',
+      ...partList,
       '  </part-list>',
-      '  <part id="P1">',
-      measuresXml,
-      '  </part>',
+      ...partsXml,
       '</score-partwise>',
       '',
     ].join('\n');
   }
 
-  toMidi(score: Score, bpm = 120): Uint8Array {
+  /** One MIDI track per staff (the two hands of a piano play simultaneously, so they need two tracks). */
+  toMidi(input: Score | ScoreDocument, bpm = 120): Uint8Array {
+    const tracks = allStaves(asDocument(input)).map((ref) => this.staffToMidiTrack(ref.staff.score, ref.part.name, bpm));
+    return new MidiWriter.Writer(tracks).buildFile();
+  }
+
+  private staffToMidiTrack(score: Score, name: string, bpm: number) {
     const track = new MidiWriter.Track();
+    track.addTrackName(name);
     track.setTempo(bpm);
     track.setTimeSignature(score.timeSignature.numerator, score.timeSignature.denominator, 24, 8);
 
@@ -129,15 +150,15 @@ export class ExportService {
     }
     flush();
 
-    return new MidiWriter.Writer(track).buildFile();
+    return track;
   }
 
-  toSvgString(score: Score): string {
+  toSvgString(score: Score | ScoreDocument): string {
     const svg = this.renderOffscreenSvg(score);
     return new XMLSerializer().serializeToString(svg);
   }
 
-  async toPngBlob(score: Score): Promise<Blob> {
+  async toPngBlob(score: Score | ScoreDocument): Promise<Blob> {
     const svg = this.renderOffscreenSvg(score);
     const width = Number(svg.getAttribute('width'));
     const height = Number(svg.getAttribute('height'));
@@ -162,51 +183,78 @@ export class ExportService {
     }
   }
 
-  downloadMusicXml(score: Score, filename = 'partitura.musicxml'): void {
+  downloadMusicXml(score: Score | ScoreDocument, filename = 'partitura.musicxml'): void {
     this.downloadText(this.toMusicXml(score), filename, 'application/vnd.recordare.musicxml+xml');
   }
 
-  downloadMidi(score: Score, bpm = 120, filename = 'partitura.mid'): void {
+  downloadMidi(score: Score | ScoreDocument, bpm = 120, filename = 'partitura.mid'): void {
     triggerDownload(new Blob([this.toMidi(score, bpm) as BlobPart], { type: 'audio/midi' }), filename);
   }
 
-  downloadSvg(score: Score, filename = 'partitura.svg'): void {
+  downloadSvg(score: Score | ScoreDocument, filename = 'partitura.svg'): void {
     this.downloadText(this.toSvgString(score), filename, 'image/svg+xml');
   }
 
-  async downloadPng(score: Score, filename = 'partitura.png'): Promise<void> {
+  async downloadPng(score: Score | ScoreDocument, filename = 'partitura.png'): Promise<void> {
     triggerDownload(await this.toPngBlob(score), filename);
   }
 
-  private measureToXml(
-    measure: Measure,
-    score: Score,
-    index: number,
-    clef: { sign: string; line: number },
-    key: { fifths: number; mode: 'major' | 'minor' },
-    ties: TieSets,
-  ): string {
-    const notesXml = measure.elements.map((el) => this.elementToXml(el, score.keySignature, ties)).join('\n');
-    const attributes =
-      index === 0
-        ? `      <attributes>
-        <divisions>${MUSICXML_DIVISIONS}</divisions>
-        <key><fifths>${key.fifths}</fifths><mode>${key.mode}</mode></key>
-        <time><beats>${score.timeSignature.numerator}</beats><beat-type>${score.timeSignature.denominator}</beat-type></time>
-        <clef><sign>${clef.sign}</sign><line>${clef.line}</line></clef>
-      </attributes>\n`
-        : '';
+  private partToXml(part: Part, partIndex: number, key: { fifths: number; mode: 'major' | 'minor' }, ties: TieSets): string {
+    const staves = part.staves;
+    const multiStaff = staves.length > 1;
+    const reference = staves[0].score;
+    const measureCount = Math.max(...staves.map((staff) => staff.score.measures.length));
 
-    return `    <measure number="${index + 1}">\n${attributes}${notesXml}\n    </measure>`;
+    const measures = Array.from({ length: measureCount }, (_, index) => {
+      const attributes = index === 0 ? this.attributesXml(part, key) : '';
+
+      // Staves of one part share a measure: write one staff, step back, write the next.
+      const staffXml = staves.map((staff, staffIndex) => {
+        const elements = staff.score.measures[index]?.elements ?? [];
+        const notes = elements
+          .map((el) => this.elementToXml(el, reference.keySignature, ties, multiStaff ? staffIndex + 1 : undefined))
+          .join('\n');
+        const isLast = staffIndex === staves.length - 1;
+        const stepBack = divisionsOf(elements);
+        const backup = isLast || stepBack === 0 ? '' : `\n      <backup>\n        <duration>${stepBack}</duration>\n      </backup>`;
+        return notes + backup;
+      });
+
+      return `    <measure number="${index + 1}">\n${attributes}${staffXml.join('\n')}\n    </measure>`;
+    }).join('\n');
+
+    return `  <part id="P${partIndex + 1}">\n${measures}\n  </part>`;
   }
 
-  private elementToXml(element: MeasureElement, keySignature: string, ties: TieSets): string {
+  private attributesXml(part: Part, key: { fifths: number; mode: 'major' | 'minor' }): string {
+    const { timeSignature } = part.staves[0].score;
+    const multiStaff = part.staves.length > 1;
+    const clefs = part.staves
+      .map((staff, index) => {
+        const clef = MUSICXML_CLEF[staff.score.clef];
+        const number = multiStaff ? ` number="${index + 1}"` : '';
+        return `        <clef${number}><sign>${clef.sign}</sign><line>${clef.line}</line></clef>`;
+      })
+      .join('\n');
+    const staves = multiStaff ? `        <staves>${part.staves.length}</staves>\n` : '';
+
+    return `      <attributes>
+        <divisions>${MUSICXML_DIVISIONS}</divisions>
+        <key><fifths>${key.fifths}</fifths><mode>${key.mode}</mode></key>
+        <time><beats>${timeSignature.numerator}</beats><beat-type>${timeSignature.denominator}</beat-type></time>
+${staves}${clefs}
+      </attributes>\n`;
+  }
+
+  private elementToXml(element: MeasureElement, keySignature: string, ties: TieSets, staffNumber?: number): string {
     const duration = (elementTicks(element) * MUSICXML_DIVISIONS * 4) / TICKS_PER_WHOLE;
     const type = MUSICXML_TYPE[element.duration];
     const dotXml = element.dotted ? '\n        <dot/>' : '';
+    // Only parts with several staves say which staff a note belongs to.
+    const staffXml = staffNumber ? `\n        <staff>${staffNumber}</staff>` : '';
 
     if (element.kind === 'rest') {
-      return `      <note>\n        <rest/>\n        <duration>${duration}</duration>\n        <type>${type}</type>${dotXml}\n      </note>`;
+      return `      <note>\n        <rest/>\n        <duration>${duration}</duration>\n        <type>${type}</type>${dotXml}${staffXml}\n      </note>`;
     }
 
     // <alter> is the sounding alteration (key signature included); <accidental> only what is written.
@@ -233,12 +281,12 @@ export class ExportService {
       `          <octave>${element.pitch.octave}</octave>`,
       '        </pitch>',
       `        <duration>${duration}</duration>${tieXml}`,
-      `        <type>${type}</type>${dotXml}${accidentalXml}${tiedXml}`,
+      `        <type>${type}</type>${dotXml}${accidentalXml}${staffXml}${tiedXml}`,
       '      </note>',
     ].join('\n');
   }
 
-  private renderOffscreenSvg(score: Score): SVGSVGElement {
+  private renderOffscreenSvg(score: Score | ScoreDocument): SVGSVGElement {
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.visibility = 'hidden';

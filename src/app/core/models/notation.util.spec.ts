@@ -1,5 +1,6 @@
 import { createEmptyScore, createNote, createRest } from './score.model';
-import { buildPlaybackSchedule, durationToBeats, pitchFromClickY, stepDiatonic, toToneNoteName } from './notation.util';
+import { createPart } from './score-document';
+import { buildDocumentSchedule, buildPlaybackSchedule, durationToBeats, pitchFromClickY, stepDiatonic, toToneNoteName } from './notation.util';
 
 describe('stepDiatonic', () => {
   it('moves up within the same octave', () => {
@@ -223,5 +224,51 @@ describe('buildPlaybackSchedule with ties', () => {
     score.measures[0].elements.push(tiedNote('C'), createNote('D', 4, 'quarter'));
 
     expect(buildPlaybackSchedule(score, 120).notes.length).toBe(2);
+  });
+});
+
+describe('buildDocumentSchedule', () => {
+  const treble = () => {
+    const score = createEmptyScore();
+    score.measures[0].elements.push(createNote('C', 5, 'quarter'), createNote('D', 5, 'quarter'));
+    return score;
+  };
+  const bass = () => {
+    const score = createEmptyScore('bass');
+    score.measures[0].elements.push(createNote('C', 3, 'half'));
+    return score;
+  };
+
+  it('plays every staff of every instrument at the same time', () => {
+    const doc = { parts: [createPart('Klavir', [treble(), bass()]), createPart('Violina', [treble()])] };
+
+    const { notes, totalSeconds } = buildDocumentSchedule(doc, 120);
+
+    expect(notes.length).toBe(5);
+    expect(notes.filter((n) => n.offsetSeconds === 0).length).toBe(3);
+    expect(totalSeconds).toBeCloseTo(1);
+  });
+
+  it('keeps the notes in time order', () => {
+    const doc = { parts: [createPart('Klavir', [treble(), bass()])] };
+
+    const offsets = buildDocumentSchedule(doc, 120).notes.map((n) => n.offsetSeconds);
+
+    expect(offsets).toEqual([...offsets].sort((a, b) => a - b));
+  });
+
+  it('ends when the longest staff ends', () => {
+    const long = createEmptyScore();
+    long.measures[0].elements.push(createNote('C', 4, 'whole'));
+    const doc = { parts: [createPart('A', [treble()]), createPart('B', [long])] };
+
+    expect(buildDocumentSchedule(doc, 120).totalSeconds).toBeCloseTo(2);
+  });
+
+  it('treats a plain score like a one-staff document', () => {
+    const schedule = buildDocumentSchedule(treble(), 120);
+
+    expect(schedule.notes.map((n) => n.noteName)).toEqual(['C5', 'D5']);
+    expect(schedule.totalSeconds).toBeCloseTo(1);
   });
 });

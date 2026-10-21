@@ -1,0 +1,26 @@
+<section class="tracks" aria-label="Instrumenti">
+  <h2>Instrumenti</h2>
+  <ul class="parts">
+    @for (part of scoreModel.document().parts; track part.id) {
+      <li class="part">
+        <span class="part__name">{{ part.name }}</span>
+        <ul class="staves">
+          @for (staff of part.staves; track staff.id; let index = $index) {
+            <li>
+              <button
+                type="button"
+                class="staff-btn"
+                [class.active]="staff.id === scoreModel.activeStaffId()"
+                [attr.aria-pressed]="staff.id === scoreModel.activeStaffId()"
+                (click)="scoreModel.setActiveStaff(staff.id)"
+              >
+                {{ staffLabel(part, index) }}
+              </button>
+            </li>
+          }
+        </ul>
+      </li>
+    }
+  </ul>
+  <button type="button" class="add-btn" (click)="addPiano()">+ Klavir (grand staff)</button>
+</section>

@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { createEmptyScore, Score } from '../models/score.model';
+import { asDocument, documentFromScore, ScoreDocument } from '../models/score-document';
 import { DEFAULT_SCORE_NAME, SavedScoreMeta, ScoreLibraryService } from '../services/score-library.service';
 import { ScoreModelService } from './score-model.service';
 
@@ -20,9 +21,9 @@ export class ScoreSessionService {
   /** Saved scores for the Open dialog, newest first. */
   readonly scores = signal<SavedScoreMeta[]>([]);
 
-  /** The score object as it was when last opened or saved; any edit produces a different object. */
-  private readonly baseline = signal<Score>(this.scoreModel.score());
-  readonly dirty = computed(() => this.scoreModel.score() !== this.baseline());
+  /** The document as it was when last opened or saved; any edit produces a different object. */
+  private readonly baseline = signal<ScoreDocument>(this.scoreModel.document());
+  readonly dirty = computed(() => this.scoreModel.document() !== this.baseline());
 
   async refreshList(): Promise<void> {
     this.scores.set(await this.library.list());
@@ -41,16 +42,16 @@ export class ScoreSessionService {
     this.scoreModel.replaceScore(createEmptyScore());
     this.currentId.set(null);
     this.currentName.set(UNTITLED_SCORE_NAME);
-    this.baseline.set(this.scoreModel.score());
+    this.baseline.set(this.scoreModel.document());
   }
 
   /** Shows a score that came from outside the library (an imported file) as an unsaved one. */
-  adoptUnsaved(score: Score, name = UNTITLED_SCORE_NAME): void {
-    this.scoreModel.replaceScore(score);
+  adoptUnsaved(input: Score | ScoreDocument, name = UNTITLED_SCORE_NAME): void {
+    this.scoreModel.replaceDocument(asDocument(input));
     this.currentId.set(null);
     this.currentName.set(name);
     // Nothing is saved yet, so the score counts as changed until it is stored.
-    this.baseline.set(createEmptyScore());
+    this.baseline.set(documentFromScore(createEmptyScore()));
   }
 
   /** Returns false when the entry no longer exists or holds unreadable data. */
@@ -59,10 +60,10 @@ export class ScoreSessionService {
     if (!saved) {
       return false;
     }
-    this.scoreModel.replaceScore(saved.score);
+    this.scoreModel.replaceDocument(saved.document);
     this.currentId.set(saved.id);
     this.currentName.set(saved.name);
-    this.baseline.set(this.scoreModel.score());
+    this.baseline.set(this.scoreModel.document());
     return true;
   }
 
@@ -81,17 +82,17 @@ export class ScoreSessionService {
     if (this.currentId() === id) {
       // The score on screen is now an unsaved copy.
       this.currentId.set(null);
-      this.baseline.set(createEmptyScore());
+      this.baseline.set(documentFromScore(createEmptyScore()));
     }
     await this.refreshList();
   }
 
   private async persist(id: string | undefined, name: string): Promise<void> {
-    const score = this.scoreModel.score();
-    const meta = await this.library.save({ id, name: name || DEFAULT_SCORE_NAME, score });
+    const document = this.scoreModel.document();
+    const meta = await this.library.save({ id, name: name || DEFAULT_SCORE_NAME, document });
     this.currentId.set(meta.id);
     this.currentName.set(meta.name);
-    this.baseline.set(score);
+    this.baseline.set(document);
     await this.refreshList();
   }
 }

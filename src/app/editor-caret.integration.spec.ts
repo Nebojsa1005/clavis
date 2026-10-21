@@ -3,6 +3,7 @@ import { App } from './app';
 import { CARET_CLASS, NotationRendererService } from './core/services/notation-renderer.service';
 import { LIBRARY_DB_NAME } from './core/services/score-library.service';
 import { createEmptyScore, createMeasure, createNote, MeasureElement, Step } from './core/models/score.model';
+import { createPart } from './core/models/score-document';
 import { CaretService } from './core/state/caret.service';
 import { NoteInputService } from './core/state/note-input.service';
 import { ScoreModelService } from './core/state/score-model.service';
@@ -535,6 +536,128 @@ describe('Caret editing (integration)', () => {
     function selection(): SelectionService {
       return TestBed.inject(SelectionService);
     }
+  });
+
+  describe('grand staff', () => {
+    let bassId: string;
+    let trebleId: string;
+
+    beforeEach(() => {
+      const treble = { ...createEmptyScore('treble'), measures: [createMeasure(quarters('C', 'D', 'E'))] };
+      const bass = { ...createEmptyScore('bass'), measures: [createMeasure([createNote('C', 3, 'half')])] };
+      const part = createPart('Klavir', [treble, bass]);
+      scoreModel.replaceDocument({ parts: [part] });
+      [trebleId, bassId] = part.staves.map((staff) => staff.id);
+      fixture.detectChanges();
+    });
+
+    const trebleSteps = () => scoreModel.document().parts[0].staves[0].score.measures[0].elements.length;
+    const bassSteps = () => scoreModel.document().parts[0].staves[1].score.measures[0].elements.length;
+    const noteNodes = () => Array.from(host().querySelectorAll('[data-score-element-id]')) as SVGGElement[];
+
+    it('draws two connected staves', () => {
+      expect(host().querySelectorAll('.vf-stave').length).toBe(2);
+      // the brace and barlines of a grand staff are drawn outside any vf-* group
+      const connectors = Array.from(host().querySelectorAll('svg path, svg rect')).filter((shape) => !shape.closest('[class^="vf-"]'));
+      expect(connectors.length).toBeGreaterThan(0);
+    });
+
+    it('makes a staff active when one of its notes is clicked', () => {
+      const bassNote = noteNodes().find((n) => n.getAttribute('data-score-staff-id') === bassId)!;
+
+      bassNote.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      fixture.detectChanges();
+
+      expect(scoreModel.activeStaffId()).toBe(bassId);
+      expect(TestBed.inject(SelectionService).selectedIds()).toEqual([bassNote.getAttribute('data-score-element-id')!]);
+    });
+
+    it('draws the caret on the active staff and moves it when the staff changes', () => {
+      press('n');
+      const onTreble = Number(host().querySelector('.clavis-caret')!.getAttribute('y1'));
+
+      scoreModel.setActiveStaff(bassId);
+      fixture.detectChanges();
+      const onBass = Number(host().querySelector('.clavis-caret')!.getAttribute('y1'));
+
+      expect(onBass).toBeGreaterThan(onTreble + 40);
+    });
+
+    it('inserts into the bass staff when the bass staff is clicked in note input mode', () => {
+      press('n');
+      const bassTop = renderer.getStaffGeometry(bassId).topLineY;
+
+      clickAt(renderer.getCaretX({ measureIndex: 0, voice: 0, tick: 0 }, bassId)!, bassTop);
+
+      expect(scoreModel.activeStaffId()).toBe(bassId);
+      expect(bassSteps()).toBe(2);
+      expect(trebleSteps()).toBe(3);
+    });
+
+    it('inserts into the treble staff when the treble staff is clicked afterwards', () => {
+      press('n');
+      clickAt(renderer.getCaretX({ measureIndex: 0, voice: 0, tick: 0 }, bassId)!, renderer.getStaffGeometry(bassId).topLineY);
+
+      clickAt(renderer.getCaretX({ measureIndex: 0, voice: 0, tick: 0 }, trebleId)!, renderer.getStaffGeometry(trebleId).topLineY);
+
+      expect(scoreModel.activeStaffId()).toBe(trebleId);
+      expect(trebleSteps()).toBe(4);
+      expect(bassSteps()).toBe(2);
+    });
+
+    it('enters the pitch for the clef of the staff that was clicked', () => {
+      press('n');
+      const bassGeometry = renderer.getStaffGeometry(bassId);
+
+      clickAt(renderer.getCaretX({ measureIndex: 0, voice: 0, tick: 0 }, bassId)!, bassGeometry.topLineY);
+
+      const inserted = scoreModel.document().parts[0].staves[1].score.measures[0].elements[0];
+      // the top line of the bass staff is A3
+      expect(inserted.kind === 'note' && inserted.pitch).toEqual({ step: 'A', octave: 3, accidental: null });
+    });
+
+    it('selects the whole measure of the staff whose empty space was clicked', () => {
+      const rect = host().getBoundingClientRect();
+      const bassTop = renderer.getStaffGeometry(bassId).topLineY;
+
+      host().dispatchEvent(
+        new MouseEvent('click', { bubbles: true, clientX: rect.left + 300, clientY: rect.top + bassTop + 60 }),
+      );
+      fixture.detectChanges();
+
+      expect(scoreModel.activeStaffId()).toBe(bassId);
+      expect(TestBed.inject(SelectionService).count()).toBe(1);
+    });
+
+    it('keeps both staves the same length and shares the time signature', () => {
+      scoreModel.setTimeSignature({ numerator: 2, denominator: 4 });
+      fixture.detectChanges();
+
+      const [treble, bass] = scoreModel.document().parts[0].staves;
+      expect(treble.score.measures.length).toBe(2);
+      expect(bass.score.measures.length).toBe(2);
+      expect(host().querySelectorAll('.vf-stave').length).toBe(4);
+    });
+
+    it('lets the arrow keys walk through the bass staff when it is active', () => {
+      scoreModel.setActiveStaff(bassId);
+      press('n');
+
+      press('ArrowRight');
+
+      expect(caret.position().tick).toBe(128);
+    });
+
+    it('undoes adding an instrument', () => {
+      scoreModel.addPart('violin');
+      fixture.detectChanges();
+      expect(host().querySelectorAll('.vf-stave').length).toBe(3);
+
+      scoreModel.undo();
+      fixture.detectChanges();
+
+      expect(host().querySelectorAll('.vf-stave').length).toBe(2);
+    });
   });
 
   describe('range operations', () => {

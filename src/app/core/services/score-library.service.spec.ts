@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { createEmptyScore, createNote, Score } from '../models/score.model';
+import { documentFromScore, ScoreDocument } from '../models/score-document';
 import { DEFAULT_SCORE_NAME, LIBRARY_DB_NAME, ScoreLibraryService } from './score-library.service';
 
 function uniqueDbName(): string {
@@ -14,8 +15,8 @@ function scoreWithNote(step: 'C' | 'D' | 'E' = 'C'): Score {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function stepOf(saved: { score: Score } | null): string | null {
-  const element = saved?.score.measures[0].elements[0];
+function stepOf(saved: { document: ScoreDocument } | null): string | null {
+  const element = saved?.document.parts[0].staves[0].score.measures[0].elements[0];
   return element?.kind === 'note' ? element.pitch.step : null;
 }
 
@@ -36,7 +37,7 @@ describe('ScoreLibraryService', () => {
   it('saves a new score and gives it an id, name and modification time', async () => {
     const before = Date.now();
 
-    const meta = await library.save({ name: 'Etida', score: scoreWithNote() });
+    const meta = await library.save({ name: 'Etida', document: documentFromScore(scoreWithNote()) });
 
     expect(meta.id).toBeTruthy();
     expect(meta.name).toBe('Etida');
@@ -46,17 +47,18 @@ describe('ScoreLibraryService', () => {
 
   it('round-trips the score data', async () => {
     const score = scoreWithNote('E');
+    const document = documentFromScore(score);
 
-    const { id } = await library.save({ name: 'A', score });
+    const { id } = await library.save({ name: 'A', document });
     const loaded = await library.get(id);
 
-    expect(loaded?.score).toEqual(score);
+    expect(loaded?.document).toEqual(document);
     expect(loaded?.name).toBe('A');
   });
 
   it('keeps several scores apart', async () => {
-    const first = await library.save({ name: 'Prva', score: scoreWithNote('C') });
-    const second = await library.save({ name: 'Druga', score: scoreWithNote('D') });
+    const first = await library.save({ name: 'Prva', document: documentFromScore(scoreWithNote('C')) });
+    const second = await library.save({ name: 'Druga', document: documentFromScore(scoreWithNote('D')) });
 
     expect(first.id).not.toBe(second.id);
     expect(stepOf(await library.get(first.id))).toBe('C');
@@ -65,10 +67,10 @@ describe('ScoreLibraryService', () => {
   });
 
   it('overwrites an entry when saving with its id and bumps the modification time', async () => {
-    const created = await library.save({ name: 'Naziv', score: scoreWithNote('C') });
+    const created = await library.save({ name: 'Naziv', document: documentFromScore(scoreWithNote('C')) });
     await wait(5);
 
-    const updated = await library.save({ id: created.id, name: 'Naziv', score: scoreWithNote('D') });
+    const updated = await library.save({ id: created.id, name: 'Naziv', document: documentFromScore(scoreWithNote('D')) });
 
     expect(updated.id).toBe(created.id);
     expect(updated.modified).toBeGreaterThan(created.modified);
@@ -77,15 +79,15 @@ describe('ScoreLibraryService', () => {
   });
 
   it('lists the most recently saved score first', async () => {
-    const older = await library.save({ name: 'Starija', score: scoreWithNote() });
+    const older = await library.save({ name: 'Starija', document: documentFromScore(scoreWithNote()) });
     await wait(5);
-    const newer = await library.save({ name: 'Novija', score: scoreWithNote() });
+    const newer = await library.save({ name: 'Novija', document: documentFromScore(scoreWithNote()) });
 
     expect((await library.list()).map((m) => m.id)).toEqual([newer.id, older.id]);
   });
 
   it('does not put score data into the list', async () => {
-    await library.save({ name: 'X', score: scoreWithNote() });
+    await library.save({ name: 'X', document: documentFromScore(scoreWithNote()) });
 
     const [entry] = await library.list();
 
@@ -93,8 +95,8 @@ describe('ScoreLibraryService', () => {
   });
 
   it('falls back to a default name for a blank one and trims names', async () => {
-    const blank = await library.save({ name: '   ', score: scoreWithNote() });
-    const padded = await library.save({ name: '  Sonata  ', score: scoreWithNote() });
+    const blank = await library.save({ name: '   ', document: documentFromScore(scoreWithNote()) });
+    const padded = await library.save({ name: '  Sonata  ', document: documentFromScore(scoreWithNote()) });
 
     expect(blank.name).toBe(DEFAULT_SCORE_NAME);
     expect(padded.name).toBe('Sonata');
@@ -102,18 +104,18 @@ describe('ScoreLibraryService', () => {
 
   it('renames an entry without touching its data', async () => {
     const score = scoreWithNote('E');
-    const { id } = await library.save({ name: 'Staro', score });
+    const { id } = await library.save({ name: 'Staro', document: documentFromScore(score) });
 
     await library.rename(id, 'Novo ime');
 
     const loaded = await library.get(id);
     expect(loaded?.name).toBe('Novo ime');
-    expect(loaded?.score).toEqual(score);
+    expect(loaded?.document.parts[0].staves[0].score).toEqual(score);
   });
 
   it('removes an entry', async () => {
-    const keep = await library.save({ name: 'Ostaje', score: scoreWithNote() });
-    const drop = await library.save({ name: 'Briše se', score: scoreWithNote() });
+    const keep = await library.save({ name: 'Ostaje', document: documentFromScore(scoreWithNote()) });
+    const drop = await library.save({ name: 'Briše se', document: documentFromScore(scoreWithNote()) });
 
     await library.remove(drop.id);
 
@@ -127,7 +129,7 @@ describe('ScoreLibraryService', () => {
   });
 
   it('returns null for an entry whose data is not a valid score', async () => {
-    const { id } = await library.save({ name: 'Kvar', score: scoreWithNote() });
+    const { id } = await library.save({ name: 'Kvar', document: documentFromScore(scoreWithNote()) });
     await corruptRecord(dbName, id);
 
     expect(await library.get(id)).toBeNull();
@@ -144,7 +146,7 @@ describe('ScoreLibraryService', () => {
       expect(entries.length).toBe(1);
       expect(entries[0].name).toBe(DEFAULT_SCORE_NAME);
       const migrated = await library.get(entries[0].id);
-      expect(migrated?.score).toEqual(legacyScore);
+      expect(migrated?.document.parts[0].staves[0].score).toEqual(legacyScore);
     });
 
     it('migrates nothing when the old database held no score', async () => {

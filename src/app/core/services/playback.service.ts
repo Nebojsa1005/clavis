@@ -1,7 +1,8 @@
 import { Injectable, signal } from '@angular/core';
 import * as Tone from 'tone';
-import { buildPlaybackSchedule } from '../models/notation.util';
+import { buildDocumentSchedule } from '../models/notation.util';
 import { Score } from '../models/score.model';
+import { ScoreDocument } from '../models/score-document';
 
 const MIN_BPM = 20;
 const MAX_BPM = 300;
@@ -24,12 +25,12 @@ export class PlaybackService {
     this.metronomeEnabled.update((value) => !value);
   }
 
-  async play(score: Score): Promise<void> {
+  async play(score: Score | ScoreDocument): Promise<void> {
     if (this.isPlaying()) {
       return;
     }
 
-    const schedule = buildPlaybackSchedule(score, this.bpm());
+    const schedule = buildDocumentSchedule(score, this.bpm());
     if (schedule.totalSeconds === 0) {
       return;
     }

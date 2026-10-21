@@ -17,7 +17,20 @@ describe('PersistenceService', () => {
 
       const imported = await service.importJsonFile(file);
 
-      expect(imported).toEqual(score);
+      expect(imported.parts.length).toBe(1);
+      expect(imported.parts[0].staves[0].score).toEqual(score);
+    });
+
+    it('round-trips a document with several instruments', async () => {
+      const document = {
+        parts: [
+          { id: 'p1', name: 'Klavir', staves: [{ id: 's1', score: createEmptyScore() }, { id: 's2', score: createEmptyScore('bass') }] },
+          { id: 'p2', name: 'Violina', staves: [{ id: 's3', score: createEmptyScore() }] },
+        ],
+      };
+      const file = new File([JSON.stringify(document)], 'partitura.json', { type: 'application/json' });
+
+      expect(await service.importJsonFile(file)).toEqual(document);
     });
 
     it('rejects invalid JSON', async () => {

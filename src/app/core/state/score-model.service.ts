@@ -1,32 +1,89 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { changeTimeSignature, insertManyWithReflow, insertWithReflow } from '../models/insert.util';
+import { findInstrumentPreset } from '../models/instruments';
+import {
+  createPart,
+  documentFromScore,
+  findStaff,
+  firstStaffId,
+  mapStaffScores,
+  normalizeDocument,
+  ScoreDocument,
+  withStaffScore,
+} from '../models/score-document';
 import { durationToBeats, stepDiatonic } from '../models/notation.util';
 import { Clef, createMeasure, createTestScore, MeasureElement, Score, TimeSignature } from '../models/score.model';
 import { isKeySignature } from '../models/key-signature.util';
-import { sanitizeTies, setTieFlag, tieNoteBefore } from '../models/tie.util';
+import { setTieFlag, tieNoteBefore } from '../models/tie.util';
 import { validateTimeSignature } from '../models/time-signature.util';
 
 const MAX_HISTORY = 20;
 
 /**
- * Izvor istine za partituru. Drži reaktivno stanje, mutacije (unos, brisanje, pomeranje visine
- * tona) i undo/redo istoriju (min. 20 koraka).
+ * Source of truth for the piece: the document (instruments with their staves), edits and
+ * undo/redo history (20 steps). Editing works on ONE staff at a time, the active staff, which is
+ * exposed as `score`; everything that edits a score (caret, insert, ties, selection, ...) goes
+ * through it. Time and key signatures are shared by all staves.
  */
 @Injectable({ providedIn: 'root' })
 export class ScoreModelService {
-  private readonly scoreState = signal<Score>(createTestScore());
-  private readonly pastStack = signal<Score[]>([]);
-  private readonly futureStack = signal<Score[]>([]);
+  private readonly documentState = signal<ScoreDocument>(documentFromScore(createTestScore()));
+  private readonly requestedStaffId = signal<string | null>(null);
+  private readonly pastStack = signal<ScoreDocument[]>([]);
+  private readonly futureStack = signal<ScoreDocument[]>([]);
 
-  readonly score = this.scoreState.asReadonly();
+  readonly document = this.documentState.asReadonly();
+
+  /** The staff being edited. Falls back to the first one when the chosen staff no longer exists. */
+  readonly activeStaffId = computed(() => {
+    const doc = this.documentState();
+    const requested = this.requestedStaffId();
+    return requested && findStaff(doc, requested) ? requested : firstStaffId(doc);
+  });
+
+  /** The score of the active staff. */
+  readonly score = computed(() => findStaff(this.documentState(), this.activeStaffId())!.score);
+
   readonly canUndo = computed(() => this.pastStack().length > 0);
   readonly canRedo = computed(() => this.futureStack().length > 0);
 
-  /** Učitavanje potpuno novog dokumenta — nije undo-ovanje, briše istoriju. */
+  /** Loads a single-staff score as the whole piece. Not an edit: clears the history. */
   replaceScore(score: Score): void {
-    this.scoreState.set(sanitizeTies(score));
+    this.replaceDocument(documentFromScore(score));
+  }
+
+  /** Loads a whole piece. Not an edit: clears the history and goes back to the first staff. */
+  replaceDocument(doc: ScoreDocument): void {
+    this.documentState.set(normalizeDocument(doc));
+    this.requestedStaffId.set(null);
     this.pastStack.set([]);
     this.futureStack.set([]);
+  }
+
+  /** Chooses which staff the editing commands act on. Not an edit, so it is not undoable. */
+  setActiveStaff(staffId: string): void {
+    if (findStaff(this.documentState(), staffId)) {
+      this.requestedStaffId.set(staffId);
+    }
+  }
+
+  /**
+   * Adds an instrument (all its staves, empty) at the bottom of the score and makes its first staff
+   * the active one. Returns the new part's id, or null for an unknown instrument.
+   */
+  addPart(presetId: string): string | null {
+    const preset = findInstrumentPreset(presetId);
+    if (!preset) {
+      return null;
+    }
+    const { timeSignature, keySignature } = this.score();
+    const part = createPart(
+      preset.name,
+      preset.clefs.map((clef) => ({ clef, timeSignature: { ...timeSignature }, keySignature, measures: [createMeasure([])] })),
+    );
+    this.mutateDocument((doc) => ({ ...doc, parts: [...doc.parts, part] }));
+    this.requestedStaffId.set(part.staves[0].id);
+    return part.id;
   }
 
   /** Dodaje element na kraj partiture; otvara novi takt kad trenutni ne može da primi element. */
@@ -49,7 +106,7 @@ export class ScoreModelService {
 
   /** Changes the clef. Notes keep their pitch; only how they are drawn and entered changes. */
   setClef(clef: Clef): void {
-    if (clef === this.scoreState().clef) {
+    if (clef === this.score().clef) {
       return;
     }
     this.mutate((score) => ({ ...score, clef }));
@@ -60,8 +117,8 @@ export class ScoreModelService {
     if (!isKeySignature(keySignature)) {
       return false;
     }
-    if (keySignature !== this.scoreState().keySignature) {
-      this.mutate((score) => ({ ...score, keySignature }));
+    if (keySignature !== this.score().keySignature) {
+      this.mutateDocument((doc) => mapStaffScores(doc, (score) => ({ ...score, keySignature })));
     }
     return true;
   }
@@ -74,11 +131,11 @@ export class ScoreModelService {
     if (validateTimeSignature(timeSignature.numerator, timeSignature.denominator) !== null) {
       return false;
     }
-    const current = this.scoreState().timeSignature;
+    const current = this.score().timeSignature;
     if (current.numerator === timeSignature.numerator && current.denominator === timeSignature.denominator) {
       return true;
     }
-    this.mutate((score) => changeTimeSignature(score, timeSignature));
+    this.mutateDocument((doc) => mapStaffScores(doc, (score) => changeTimeSignature(score, timeSignature)));
     return true;
   }
 
@@ -145,7 +202,7 @@ export class ScoreModelService {
    */
   deleteElements(ids: readonly string[]): void {
     const doomed = new Set(ids);
-    const exists = this.scoreState().measures.some((measure) => measure.elements.some((el) => doomed.has(el.id)));
+    const exists = this.score().measures.some((measure) => measure.elements.some((el) => doomed.has(el.id)));
     if (!exists) {
       return;
     }
@@ -169,8 +226,8 @@ export class ScoreModelService {
     }
     const previous = past[past.length - 1];
     this.pastStack.set(past.slice(0, -1));
-    this.futureStack.update((future) => [...future, this.scoreState()]);
-    this.scoreState.set(previous);
+    this.futureStack.update((future) => [...future, this.documentState()]);
+    this.documentState.set(previous);
   }
 
   redo(): void {
@@ -180,18 +237,25 @@ export class ScoreModelService {
     }
     const next = future[future.length - 1];
     this.futureStack.set(future.slice(0, -1));
-    this.pastStack.update((past) => [...past, this.scoreState()]);
-    this.scoreState.set(next);
+    this.pastStack.update((past) => [...past, this.documentState()]);
+    this.documentState.set(next);
   }
 
+  /** An edit of the active staff. */
   private mutate(mutator: (score: Score) => Score): void {
-    const current = this.scoreState();
+    const staffId = this.activeStaffId();
+    this.mutateDocument((doc) => withStaffScore(doc, staffId, mutator(findStaff(doc, staffId)!.score)));
+  }
+
+  private mutateDocument(mutator: (doc: ScoreDocument) => ScoreDocument): void {
+    const current = this.documentState();
     this.pastStack.update((stack) => {
       const next = [...stack, current];
       return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next;
     });
     this.futureStack.set([]);
-    // Every edit passes through here, so a tie can never outlive the neighbours it joined.
-    this.scoreState.set(sanitizeTies(mutator(current)));
+    // Every edit passes through here, so ties never outlive their neighbours and all staves keep
+    // the same signatures and number of measures.
+    this.documentState.set(normalizeDocument(mutator(current)));
   }
 }

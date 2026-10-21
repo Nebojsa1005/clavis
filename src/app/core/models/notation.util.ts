@@ -1,6 +1,7 @@
 import { durationToTicks, TICKS_PER_WHOLE } from './caret.util';
 import { effectiveAccidental } from './key-signature.util';
 import { Clef, NoteDuration, NotePitch, Score, Step, TimeSignature } from './score.model';
+import { allStaves, asDocument, ScoreDocument } from './score-document';
 import { tieLinks, tiedTargetIds } from './tie.util';
 
 const DIATONIC_ORDER: Step[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
@@ -106,4 +107,13 @@ export function buildPlaybackSchedule(score: Score, bpm: number): PlaybackSchedu
   }
 
   return { notes, totalSeconds: elapsed };
+}
+
+/** The notes of every staff of a document on one timeline; staves play simultaneously. */
+export function buildDocumentSchedule(input: Score | ScoreDocument, bpm: number): PlaybackSchedule {
+  const schedules = allStaves(asDocument(input)).map((ref) => buildPlaybackSchedule(ref.staff.score, bpm));
+  return {
+    notes: schedules.flatMap((schedule) => schedule.notes).sort((a, b) => a.offsetSeconds - b.offsetSeconds),
+    totalSeconds: Math.max(...schedules.map((schedule) => schedule.totalSeconds)),
+  };
 }

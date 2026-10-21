@@ -205,4 +205,44 @@ describe('ScoreSessionService', () => {
     expect(session.currentName()).toBe('uvezena');
     expect(session.dirty()).toBeTrue();
   });
+
+  describe('documents with several instruments', () => {
+    it('saves and reopens every instrument and staff', async () => {
+      session.newScore();
+      scoreModel.addPart('piano');
+      scoreModel.appendElement(createNote('C', 5, 'quarter'));
+      await session.saveAs('Klavirska');
+      const id = session.currentId()!;
+      session.newScore();
+      expect(scoreModel.document().parts.length).toBe(1);
+
+      await session.open(id);
+
+      expect(scoreModel.document().parts.map((p) => p.name)).toEqual(['Instrument', 'Klavir']);
+      expect(scoreModel.document().parts[1].staves.map((s) => s.score.clef)).toEqual(['treble', 'bass']);
+    });
+
+    it('does not count switching the active staff as an unsaved change', () => {
+      session.newScore();
+      scoreModel.addPart('piano');
+      session.adoptUnsaved(scoreModel.document());
+      session.newScore();
+      scoreModel.addPart('violin');
+      void session.save();
+      const dirtyBefore = session.dirty();
+
+      scoreModel.setActiveStaff(scoreModel.document().parts[0].staves[0].id);
+
+      expect(session.dirty()).toBe(dirtyBefore);
+    });
+
+    it('counts adding an instrument as an unsaved change', () => {
+      session.newScore();
+      expect(session.dirty()).toBeFalse();
+
+      scoreModel.addPart('piano');
+
+      expect(session.dirty()).toBeTrue();
+    });
+  });
 });

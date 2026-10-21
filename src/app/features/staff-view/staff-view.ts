@@ -7,7 +7,11 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { NotationRendererService, SCORE_ELEMENT_ID_ATTR } from '../../core/services/notation-renderer.service';
+import {
+  NotationRendererService,
+  SCORE_ELEMENT_ID_ATTR,
+  SCORE_STAFF_ID_ATTR,
+} from '../../core/services/notation-renderer.service';
 import { CaretService } from '../../core/state/caret.service';
 import { NoteInputService } from '../../core/state/note-input.service';
 import { ScoreModelService } from '../../core/state/score-model.service';
@@ -40,7 +44,8 @@ export class StaffView {
 
   constructor() {
     effect(() => {
-      const score = this.scoreModel.score();
+      const document = this.scoreModel.document();
+      const activeStaffId = this.scoreModel.activeStaffId();
       const selectedIds = new Set(this.selection.selectedIds());
       // The caret is only meaningful (and visible) while note input mode is on.
       const caret = this.noteInput.active() ? this.caretService.position() : null;
@@ -48,7 +53,7 @@ export class StaffView {
       if (!host) {
         return;
       }
-      this.notationRenderer.render(host, score, selectedIds, caret);
+      this.notationRenderer.render(host, document, selectedIds, caret, activeStaffId);
     });
   }
 
@@ -78,6 +83,7 @@ export class StaffView {
     const target = event.target as Element | null;
     const hit = target?.closest(`[${SCORE_ELEMENT_ID_ATTR}]`);
     if (hit) {
+      this.activateStaff(hit.getAttribute(SCORE_STAFF_ID_ATTR));
       const id = hit.getAttribute(SCORE_ELEMENT_ID_ATTR)!;
       if (event.shiftKey) {
         this.selection.extendTo(id);
@@ -94,7 +100,10 @@ export class StaffView {
       return;
     }
     const rect = host.getBoundingClientRect();
-    const position = this.notationRenderer.caretFromX(event.clientX - rect.left);
+    // A click on empty space belongs to the staff nearest to it, which becomes the active one.
+    this.activateStaff(this.notationRenderer.staffIdAtY(event.clientY - rect.top));
+    const activeStaffId = this.scoreModel.activeStaffId();
+    const position = this.notationRenderer.caretFromX(event.clientX - rect.left, activeStaffId);
 
     if (!this.noteInput.active()) {
       // Outside note input a click on empty staff selects the whole measure under the pointer.
@@ -108,8 +117,14 @@ export class StaffView {
       this.caretService.setPosition(position);
     }
     const y = event.clientY - rect.top;
-    const geometry = this.notationRenderer.getStaffGeometry();
+    const geometry = this.notationRenderer.getStaffGeometry(activeStaffId);
     this.noteInput.enterPitchFromClick(this.scoreModel.score().clef, y, geometry.topLineY, geometry.halfStepPx);
+  }
+
+  private activateStaff(staffId: string | null): void {
+    if (staffId && staffId !== this.scoreModel.activeStaffId()) {
+      this.scoreModel.setActiveStaff(staffId);
+    }
   }
 
   private onDragMove(event: MouseEvent): void {

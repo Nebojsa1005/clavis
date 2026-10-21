@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { KEY_SIGNATURE_OPTIONS } from '../models/key-signature.util';
 import { CLEFS, createEmptyScore, createMeasure, createNote, createRest } from '../models/score.model';
-import { NotationRendererService, CARET_CLASS, SCORE_ELEMENT_ID_ATTR } from './notation-renderer.service';
+import { createPart } from '../models/score-document';
+import { NotationRendererService, CARET_CLASS, SCORE_ELEMENT_ID_ATTR, SCORE_STAFF_ID_ATTR } from './notation-renderer.service';
 
 describe('NotationRendererService', () => {
   let service: NotationRendererService;
@@ -272,6 +273,171 @@ describe('NotationRendererService', () => {
 
       expect(service.caretFromX(-50)!.measureIndex).toBe(0);
       expect(service.caretFromX(99999)).toEqual({ measureIndex: 1, voice: 0, tick: 128 });
+    });
+  });
+
+  describe('several staves', () => {
+    const pianoDoc = () => {
+      const treble = createEmptyScore('treble');
+      treble.measures[0].elements.push(
+        createNote('C', 5, 'quarter'),
+        createNote('D', 5, 'quarter'),
+        createNote('E', 5, 'quarter'),
+        createNote('F', 5, 'quarter'),
+      );
+      const bass = createEmptyScore('bass');
+      bass.measures[0].elements.push(createNote('C', 3, 'quarter'), createNote('G', 3, 'half'));
+      return { parts: [createPart('Klavir', [treble, bass])] };
+    };
+    const staffIds = (doc: ReturnType<typeof pianoDoc>) => doc.parts[0].staves.map((s) => s.id);
+
+    it('draws a stave for every staff in every measure', () => {
+      service.render(container, pianoDoc());
+
+      expect(container.querySelectorAll('.vf-stave').length).toBe(2);
+    });
+
+    it('connects the staves of a grand staff, more than it joins separate instruments, and a lone staff not at all', () => {
+      // VexFlow gives connectors no class of their own: they are the shapes outside any vf-* group.
+      const looseShapes = () =>
+        Array.from(container.querySelectorAll('svg path, svg rect')).filter((shape) => !shape.closest('[class^="vf-"]')).length;
+
+      const doc = pianoDoc();
+      service.render(container, doc);
+      const grandStaff = looseShapes();
+
+      const [treble, bass] = doc.parts[0].staves;
+      service.render(container, { parts: [createPart('A', [treble.score]), createPart('B', [bass.score])] });
+      const separate = looseShapes();
+
+      service.render(container, createEmptyScore());
+
+      expect(grandStaff).toBeGreaterThan(separate);
+      expect(separate).toBeGreaterThan(0);
+      expect(looseShapes()).toBe(0);
+    });
+
+    it('stacks the staves vertically and makes the canvas taller', () => {
+      const doc = pianoDoc();
+      service.render(container, doc);
+      const [trebleId, bassId] = staffIds(doc);
+
+      expect(service.getStaffGeometry(bassId).topLineY).toBeGreaterThan(service.getStaffGeometry(trebleId).topLineY + 40);
+      const tall = Number(container.querySelector('svg')!.getAttribute('height'));
+
+      service.render(container, createEmptyScore());
+      expect(tall).toBeGreaterThan(Number(container.querySelector('svg')!.getAttribute('height')));
+    });
+
+    it('keeps separate instruments further apart than the staves of one instrument', () => {
+      const doc = pianoDoc();
+      doc.parts.push(createPart('Violina', [createEmptyScore()]));
+      service.render(container, doc);
+      const [trebleId, bassId] = staffIds(doc);
+      const violinId = doc.parts[1].staves[0].id;
+
+      const withinPart = service.getStaffGeometry(bassId).topLineY - service.getStaffGeometry(trebleId).topLineY;
+      const betweenParts = service.getStaffGeometry(violinId).topLineY - service.getStaffGeometry(bassId).topLineY;
+
+      expect(betweenParts).toBeGreaterThan(withinPart);
+    });
+
+    it('tags each drawn note with its staff', () => {
+      const doc = pianoDoc();
+      service.render(container, doc);
+      const [trebleId, bassId] = staffIds(doc);
+
+      const staffOf = (noteId: string) =>
+        container.querySelector(`[${SCORE_ELEMENT_ID_ATTR}="${noteId}"]`)?.getAttribute(SCORE_STAFF_ID_ATTR);
+      expect(staffOf(doc.parts[0].staves[0].score.measures[0].elements[0].id)).toBe(trebleId);
+      expect(staffOf(doc.parts[0].staves[1].score.measures[0].elements[0].id)).toBe(bassId);
+    });
+
+    it('finds the staff nearest to a y coordinate', () => {
+      const doc = pianoDoc();
+      service.render(container, doc);
+      const [trebleId, bassId] = staffIds(doc);
+
+      expect(service.staffIdAtY(service.getStaffGeometry(trebleId).topLineY + 15)).toBe(trebleId);
+      expect(service.staffIdAtY(service.getStaffGeometry(bassId).topLineY + 15)).toBe(bassId);
+      expect(service.staffIdAtY(-500)).toBe(trebleId);
+      expect(service.staffIdAtY(5000)).toBe(bassId);
+    });
+
+    it('lines up notes that start at the same time in different staves', () => {
+      const doc = pianoDoc();
+      service.render(container, doc);
+      const [trebleId, bassId] = staffIds(doc);
+
+      for (const tick of [0, 64]) {
+        const treble = service.getCaretX({ measureIndex: 0, voice: 0, tick }, trebleId)!;
+        const bass = service.getCaretX({ measureIndex: 0, voice: 0, tick }, bassId)!;
+        expect(Math.abs(treble - bass)).toBeLessThan(1.5);
+      }
+    });
+
+    it('keeps caret stops per staff', () => {
+      const doc = pianoDoc();
+      service.render(container, doc);
+      const [trebleId, bassId] = staffIds(doc);
+
+      // treble: quarters at 0, 64, 128, 192; bass: a quarter then a half, so stops at 0, 64, 192
+      expect(service.getCaretX({ measureIndex: 0, voice: 0, tick: 128 }, trebleId)).not.toBeNull();
+      expect(service.getCaretX({ measureIndex: 0, voice: 0, tick: 128 }, bassId)).toBeNull();
+      expect(service.caretFromX(10000, bassId)?.tick).toBe(192);
+    });
+
+    it('draws the caret on the active staff', () => {
+      const doc = pianoDoc();
+      const [trebleId, bassId] = staffIds(doc);
+
+      service.render(container, doc, new Set(), { measureIndex: 0, voice: 0, tick: 0 }, bassId);
+
+      const y1 = Number(container.querySelector(`.${CARET_CLASS}`)!.getAttribute('y1'));
+      const bassTop = service.getStaffGeometry(bassId).topLineY;
+      const trebleTop = service.getStaffGeometry(trebleId).topLineY;
+      expect(y1).toBeGreaterThan(trebleTop + 40);
+      expect(y1).toBeLessThan(bassTop);
+    });
+
+    it('answers position queries for the active staff by default', () => {
+      const doc = pianoDoc();
+      const [, bassId] = staffIds(doc);
+
+      service.render(container, doc, new Set(), null, bassId);
+
+      expect(service.getCaretX({ measureIndex: 0, voice: 0, tick: 128 })).toBeNull();
+      expect(service.getCaretX({ measureIndex: 0, voice: 0, tick: 128 }, doc.parts[0].staves[0].id)).not.toBeNull();
+    });
+
+    it('draws ties inside any staff', () => {
+      const doc = pianoDoc();
+      const bass = doc.parts[0].staves[1].score.measures[0].elements;
+      bass.splice(0, 2, { ...createNote('C', 3, 'quarter'), tieToNext: true }, createNote('C', 3, 'quarter'));
+
+      service.render(container, doc);
+
+      expect(container.querySelectorAll('.vf-stavetie').length).toBe(1);
+    });
+
+    it('pads a staff that is shorter than the others with empty measures', () => {
+      const doc = pianoDoc();
+      doc.parts[0].staves[0].score.measures.push(createMeasure([createNote('C', 5, 'whole')]));
+
+      service.render(container, doc);
+
+      // 2 columns x 2 staves
+      expect(container.querySelectorAll('.vf-stave').length).toBe(4);
+    });
+
+    it('highlights selected notes in any staff', () => {
+      const doc = pianoDoc();
+      const bassNote = doc.parts[0].staves[1].score.measures[0].elements[0];
+
+      service.render(container, doc, new Set([bassNote.id]));
+
+      const node = container.querySelector(`[${SCORE_ELEMENT_ID_ATTR}="${bassNote.id}"]`) as SVGElement;
+      expect(node.getAttribute('fill')).toBe('#3b5bfd');
     });
   });
 });

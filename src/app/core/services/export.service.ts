@@ -4,8 +4,15 @@ import { elementTicks, TICKS_PER_WHOLE } from '../models/caret.util';
 import { effectiveAccidental, findKeySignature } from '../models/key-signature.util';
 import { toToneNoteName } from '../models/notation.util';
 import { AccidentalValue, Measure, MeasureElement, NoteDuration, Score } from '../models/score.model';
+import { tieLinks, tiedTargetIds } from '../models/tie.util';
 import { triggerDownload } from '../utils/download.util';
 import { NotationRendererService } from './notation-renderer.service';
+
+/** Ids of notes where a tie starts / stops, for MusicXML. */
+interface TieSets {
+  starts: Set<string>;
+  stops: Set<string>;
+}
 
 /** MusicXML "divisions" per quarter note; 32 keeps even a dotted 64th (3 divisions) an integer. */
 const MUSICXML_DIVISIONS = 32;
@@ -55,8 +62,10 @@ export class ExportService {
   toMusicXml(score: Score): string {
     const clef = MUSICXML_CLEF[score.clef];
     const key = findKeySignature(score.keySignature) ?? { fifths: 0, mode: 'major' as const };
+    const links = tieLinks(score);
+    const ties: TieSets = { starts: new Set(links.map((link) => link.from.id)), stops: tiedTargetIds(links) };
     const measuresXml = score.measures
-      .map((measure, index) => this.measureToXml(measure, score, index, clef, key))
+      .map((measure, index) => this.measureToXml(measure, score, index, clef, key, ties))
       .join('\n');
 
     return [
@@ -79,25 +88,46 @@ export class ExportService {
     track.setTempo(bpm);
     track.setTimeSignature(score.timeSignature.numerator, score.timeSignature.denominator, 24, 8);
 
+    const continuesPreviousNote = tiedTargetIds(tieLinks(score));
     let pendingWait: string[] = [];
+    // A tied chain becomes ONE note event whose duration is the sum of its parts.
+    let open: { pitch: string; durations: string[]; wait: string[] | undefined } | null = null;
+    const flush = () => {
+      if (open) {
+        track.addEvent(
+          new MidiWriter.NoteEvent({
+            pitch: [open.pitch],
+            duration: open.durations.length === 1 ? open.durations[0] : open.durations,
+            wait: open.wait,
+          }),
+        );
+        open = null;
+      }
+    };
+
     for (const measure of score.measures) {
       for (const element of measure.elements) {
         // midi-writer-js marks a dotted duration with a leading "d" ("d4" = dotted quarter).
         const token = (element.dotted ? 'd' : '') + MIDI_DURATION_TOKEN[element.duration];
         if (element.kind === 'rest') {
+          flush();
           pendingWait.push(token);
           continue;
         }
-        track.addEvent(
-          new MidiWriter.NoteEvent({
-            pitch: [toToneNoteName(element.pitch, score.keySignature)],
-            duration: token,
-            wait: pendingWait.length > 0 ? pendingWait : undefined,
-          }),
-        );
+        if (open && continuesPreviousNote.has(element.id)) {
+          open.durations.push(token);
+          continue;
+        }
+        flush();
+        open = {
+          pitch: toToneNoteName(element.pitch, score.keySignature),
+          durations: [token],
+          wait: pendingWait.length > 0 ? pendingWait : undefined,
+        };
         pendingWait = [];
       }
     }
+    flush();
 
     return new MidiWriter.Writer(track).buildFile();
   }
@@ -154,8 +184,9 @@ export class ExportService {
     index: number,
     clef: { sign: string; line: number },
     key: { fifths: number; mode: 'major' | 'minor' },
+    ties: TieSets,
   ): string {
-    const notesXml = measure.elements.map((el) => this.elementToXml(el, score.keySignature)).join('\n');
+    const notesXml = measure.elements.map((el) => this.elementToXml(el, score.keySignature, ties)).join('\n');
     const attributes =
       index === 0
         ? `      <attributes>
@@ -169,7 +200,7 @@ export class ExportService {
     return `    <measure number="${index + 1}">\n${attributes}${notesXml}\n    </measure>`;
   }
 
-  private elementToXml(element: MeasureElement, keySignature: string): string {
+  private elementToXml(element: MeasureElement, keySignature: string, ties: TieSets): string {
     const duration = (elementTicks(element) * MUSICXML_DIVISIONS * 4) / TICKS_PER_WHOLE;
     const type = MUSICXML_TYPE[element.duration];
     const dotXml = element.dotted ? '\n        <dot/>' : '';
@@ -186,14 +217,23 @@ export class ExportService {
       ? `\n        <accidental>${element.pitch.accidental}</accidental>`
       : '';
 
+    // <tie> is the sounding connection (before <type>); <tied> is the engraved arc (in <notations>).
+    const stops = ties.stops.has(element.id);
+    const starts = ties.starts.has(element.id);
+    const tieXml = (stops ? '\n        <tie type="stop"/>' : '') + (starts ? '\n        <tie type="start"/>' : '');
+    const tiedXml =
+      stops || starts
+        ? `\n        <notations>${stops ? '<tied type="stop"/>' : ''}${starts ? '<tied type="start"/>' : ''}</notations>`
+        : '';
+
     return [
       '      <note>',
       '        <pitch>',
       `          <step>${element.pitch.step}</step>${alterXml}`,
       `          <octave>${element.pitch.octave}</octave>`,
       '        </pitch>',
-      `        <duration>${duration}</duration>`,
-      `        <type>${type}</type>${dotXml}${accidentalXml}`,
+      `        <duration>${duration}</duration>${tieXml}`,
+      `        <type>${type}</type>${dotXml}${accidentalXml}${tiedXml}`,
       '      </note>',
     ].join('\n');
   }

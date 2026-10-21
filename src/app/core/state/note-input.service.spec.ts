@@ -93,4 +93,60 @@ describe('NoteInputService', () => {
       expect(durations).toEqual(['thirtysecond', 'sixtyfourth']);
     });
   });
+
+  describe('armed tie', () => {
+    const flags = () =>
+      scoreModel.score().measures.flatMap((m) => m.elements.map((el) => (el.kind === 'note' && el.tieToNext ? 'T' : '-')));
+
+    it('ties the next entered note to the previous one of the same pitch', () => {
+      service.setActive(true);
+      service.enterPitchFromClick('treble', 80, 80, 5);
+
+      service.toggleTieArmed();
+      service.enterPitchFromClick('treble', 80, 80, 5);
+
+      expect(flags()).toEqual(['T', '-']);
+    });
+
+    it('disarms after one note, so the following note is not tied', () => {
+      service.setActive(true);
+      service.enterPitchFromClick('treble', 80, 80, 5);
+      service.toggleTieArmed();
+      service.enterPitchFromClick('treble', 80, 80, 5);
+
+      service.enterPitchFromClick('treble', 80, 80, 5);
+
+      expect(flags()).toEqual(['T', '-', '-']);
+      expect(service.tieArmed()).toBeFalse();
+    });
+
+    it('does not tie to a different pitch but still disarms', () => {
+      service.setActive(true);
+      service.enterPitchFromClick('treble', 80, 80, 5);
+      service.toggleTieArmed();
+
+      service.enterPitchFromClick('treble', 85, 80, 5);
+
+      expect(flags()).toEqual(['-', '-']);
+      expect(service.tieArmed()).toBeFalse();
+    });
+
+    it('disarms when a rest is entered', () => {
+      service.setActive(true);
+      service.toggleTieArmed();
+
+      service.enterRest();
+
+      expect(service.tieArmed()).toBeFalse();
+    });
+
+    it('disarms when note input mode is left', () => {
+      service.setActive(true);
+      service.toggleTieArmed();
+
+      service.setActive(false);
+
+      expect(service.tieArmed()).toBeFalse();
+    });
+  });
 });

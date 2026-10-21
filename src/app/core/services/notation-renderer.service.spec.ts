@@ -64,6 +64,53 @@ describe('NotationRendererService', () => {
     expect(fillOf(b.id)).not.toBe('#3b5bfd');
   });
 
+  describe('ties', () => {
+    const tied = (step: 'C' | 'D', duration: 'quarter' | 'half' = 'quarter') => ({
+      ...createNote(step, 4, duration),
+      tieToNext: true,
+    });
+
+    it('draws an arc for a tied pair and none otherwise', () => {
+      const plain = createEmptyScore();
+      plain.measures[0].elements.push(createNote('C', 4, 'quarter'), createNote('C', 4, 'quarter'));
+      service.render(container, plain);
+      expect(container.querySelectorAll('.vf-stavetie').length).toBe(0);
+
+      const withTie = createEmptyScore();
+      withTie.measures[0].elements.push(tied('C'), createNote('C', 4, 'quarter'));
+      service.render(container, withTie);
+      expect(container.querySelectorAll('.vf-stavetie').length).toBe(1);
+    });
+
+    it('draws one arc per link of a chain', () => {
+      const score = createEmptyScore();
+      score.measures[0].elements.push(tied('C'), tied('C'), createNote('C', 4, 'half'));
+
+      service.render(container, score);
+
+      expect(container.querySelectorAll('.vf-stavetie').length).toBe(2);
+    });
+
+    it('draws a tie across a barline', () => {
+      const score = createEmptyScore();
+      score.measures[0].elements.push(createNote('D', 4, 'half'), createNote('E', 4, 'quarter'), tied('C'));
+      score.measures.push(createMeasure([createNote('C', 4, 'half')]));
+
+      service.render(container, score);
+
+      expect(container.querySelectorAll('.vf-stavetie').length).toBe(1);
+    });
+
+    it('draws no arc for a flag that does not join the same pitch', () => {
+      const score = createEmptyScore();
+      score.measures[0].elements.push(tied('C'), createNote('D', 4, 'quarter'));
+
+      service.render(container, score);
+
+      expect(container.querySelectorAll('.vf-stavetie').length).toBe(0);
+    });
+  });
+
   it('draws an extra element (the augmentation dot) for each dotted note and rest', () => {
     // VexFlow gives the dot no class of its own, so compare what is drawn inside the note groups.
     const drawnPerNote = (dotted: boolean) => {

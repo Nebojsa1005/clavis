@@ -3,6 +3,7 @@ import { changeTimeSignature, insertManyWithReflow, insertWithReflow } from '../
 import { durationToBeats, stepDiatonic } from '../models/notation.util';
 import { Clef, createMeasure, createTestScore, MeasureElement, Score, TimeSignature } from '../models/score.model';
 import { isKeySignature } from '../models/key-signature.util';
+import { sanitizeTies, setTieFlag, tieNoteBefore } from '../models/tie.util';
 import { validateTimeSignature } from '../models/time-signature.util';
 
 const MAX_HISTORY = 20;
@@ -23,7 +24,7 @@ export class ScoreModelService {
 
   /** Učitavanje potpuno novog dokumenta — nije undo-ovanje, briše istoriju. */
   replaceScore(score: Score): void {
-    this.scoreState.set(score);
+    this.scoreState.set(sanitizeTies(score));
     this.pastStack.set([]);
     this.futureStack.set([]);
   }
@@ -81,9 +82,23 @@ export class ScoreModelService {
     return true;
   }
 
-  /** Inserts an element before `index` in a measure; overflow spills into the following measures. */
-  insertElement(measureIndex: number, index: number, element: MeasureElement): void {
-    this.mutate((score) => insertWithReflow(score, measureIndex, index, element));
+  /**
+   * Inserts an element before `index` in a measure; overflow spills into the following measures.
+   * With `tiePrevious` the note before it is tied to it when they share a pitch.
+   */
+  insertElement(measureIndex: number, index: number, element: MeasureElement, tiePrevious = false): void {
+    this.mutate((score) => {
+      const inserted = insertWithReflow(score, measureIndex, index, element);
+      return tiePrevious ? tieNoteBefore(inserted, element.id) : inserted;
+    });
+  }
+
+  /**
+   * Sets or clears the tie from each given note to the element after it, as one undo step. Ties
+   * that would not join two same-pitch notes are dropped by the usual sanitising.
+   */
+  setTies(ids: readonly string[], tied: boolean): void {
+    this.mutate((score) => setTieFlag(score, new Set(ids), tied));
   }
 
   /** Inserts several elements in order as ONE undo step; see `insertManyWithReflow`. */
@@ -176,6 +191,7 @@ export class ScoreModelService {
       return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next;
     });
     this.futureStack.set([]);
-    this.scoreState.set(mutator(current));
+    // Every edit passes through here, so a tie can never outlive the neighbours it joined.
+    this.scoreState.set(sanitizeTies(mutator(current)));
   }
 }

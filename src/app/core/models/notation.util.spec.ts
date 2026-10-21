@@ -162,3 +162,66 @@ describe('buildPlaybackSchedule with dotted notes', () => {
     expect(second.offsetSeconds).toBeCloseTo(0.75);
   });
 });
+
+describe('buildPlaybackSchedule with ties', () => {
+  const tiedNote = (step: 'C' | 'D', duration: 'quarter' | 'half' | 'eighth' = 'quarter') => ({
+    ...createNote(step, 4, duration),
+    tieToNext: true,
+  });
+
+  it('plays two tied quarters as one half-note-long sound', () => {
+    const score = createEmptyScore();
+    score.measures[0].elements.push(tiedNote('C'), createNote('C', 4, 'quarter'));
+
+    const { notes, totalSeconds } = buildPlaybackSchedule(score, 120);
+
+    expect(notes.length).toBe(1);
+    expect(notes[0].durationSeconds).toBeCloseTo(1);
+    expect(totalSeconds).toBeCloseTo(1);
+  });
+
+  it('sums a whole chain', () => {
+    const score = createEmptyScore();
+    score.measures[0].elements.push(tiedNote('C'), tiedNote('C', 'eighth'), createNote('C', 4, 'half'));
+
+    const { notes } = buildPlaybackSchedule(score, 120);
+
+    expect(notes.length).toBe(1);
+    expect(notes[0].durationSeconds).toBeCloseTo(0.5 + 0.25 + 1);
+  });
+
+  it('does not strike the tied note again and keeps following notes in time', () => {
+    const score = createEmptyScore();
+    score.measures[0].elements.push(tiedNote('C'), createNote('C', 4, 'quarter'), createNote('D', 4, 'quarter'));
+
+    const { notes } = buildPlaybackSchedule(score, 120);
+
+    expect(notes.map((n) => n.noteName)).toEqual(['C4', 'D4']);
+    expect(notes[1].offsetSeconds).toBeCloseTo(1);
+  });
+
+  it('ties across a barline', () => {
+    const score = createEmptyScore();
+    score.measures[0].elements.push(createNote('D', 4, 'half'), createNote('D', 4, 'quarter'), tiedNote('C'));
+    score.measures.push({ id: 'm2', elements: [createNote('C', 4, 'half')] });
+
+    const { notes } = buildPlaybackSchedule(score, 120);
+
+    expect(notes.map((n) => n.noteName)).toEqual(['D4', 'D4', 'C4']);
+    expect(notes[2].durationSeconds).toBeCloseTo(0.5 + 1);
+  });
+
+  it('plays equal neighbours twice when they are not tied', () => {
+    const score = createEmptyScore();
+    score.measures[0].elements.push(createNote('C', 4, 'quarter'), createNote('C', 4, 'quarter'));
+
+    expect(buildPlaybackSchedule(score, 120).notes.length).toBe(2);
+  });
+
+  it('ignores a tie flag that does not join the same pitch', () => {
+    const score = createEmptyScore();
+    score.measures[0].elements.push(tiedNote('C'), createNote('D', 4, 'quarter'));
+
+    expect(buildPlaybackSchedule(score, 120).notes.length).toBe(2);
+  });
+});

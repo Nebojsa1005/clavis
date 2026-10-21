@@ -60,4 +60,37 @@ describe('NoteInputService', () => {
     const note = scoreModel.score().measures[0].elements[0];
     expect(note.kind === 'note' && note.pitch.step).toBe('E');
   });
+
+  describe('dotted notes and short durations', () => {
+    it('is not dotted by default and toggles', () => {
+      expect(service.dotted()).toBeFalse();
+      service.toggleDotted();
+      expect(service.dotted()).toBeTrue();
+      service.toggleDotted();
+      expect(service.dotted()).toBeFalse();
+    });
+
+    it('enters dotted notes and rests while the dot is on', () => {
+      service.setActive(true);
+      service.toggleDotted();
+
+      service.enterPitchFromClick('treble', 80, 80, 5);
+      service.enterRest();
+
+      const [note, rest] = scoreModel.score().measures[0].elements;
+      expect(note.dotted).toBeTrue();
+      expect(rest.dotted).toBeTrue();
+    });
+
+    it('enters 32nd and 64th notes', () => {
+      service.setActive(true);
+      service.setDuration('thirtysecond');
+      service.enterPitchFromClick('treble', 80, 80, 5);
+      service.setDuration('sixtyfourth');
+      service.enterPitchFromClick('treble', 80, 80, 5);
+
+      const durations = scoreModel.score().measures[0].elements.map((el) => el.duration);
+      expect(durations).toEqual(['thirtysecond', 'sixtyfourth']);
+    });
+  });
 });

@@ -34,7 +34,7 @@ describe('StaffView', () => {
 
     expect(renderSpy).toHaveBeenCalledTimes(1);
     expect(renderSpy.calls.mostRecent().args[1]).toBe(scoreModel.score());
-    expect(renderSpy.calls.mostRecent().args[2]).toBeNull();
+    expect(renderSpy.calls.mostRecent().args[2]).toEqual(new Set());
   });
 
   it('re-renders when the score signal changes', () => {
@@ -48,28 +48,32 @@ describe('StaffView', () => {
   });
 
   it('re-renders when the selection changes', () => {
+    const note = createNote('C', 4, 'quarter');
+    scoreModel.replaceScore({ ...createEmptyScore(), measures: [createMeasure([note])] });
     const fixture = TestBed.createComponent(StaffView);
     fixture.detectChanges();
 
-    selection.select('some-id');
+    selection.select(note.id);
     fixture.detectChanges();
 
     expect(renderSpy).toHaveBeenCalledTimes(2);
-    expect(renderSpy.calls.mostRecent().args[2]).toBe('some-id');
+    expect(renderSpy.calls.mostRecent().args[2]).toEqual(new Set([note.id]));
   });
 
   it('selects an existing element when clicking its rendered node', () => {
+    const note = createNote('C', 4, 'quarter');
+    scoreModel.replaceScore({ ...createEmptyScore(), measures: [createMeasure([note])] });
     const fixture = TestBed.createComponent(StaffView);
     fixture.detectChanges();
 
     const host = fixture.nativeElement.querySelector('.staff-canvas') as HTMLDivElement;
     const fakeNoteNode = document.createElement('g');
-    fakeNoteNode.setAttribute('data-score-element-id', 'abc-123');
+    fakeNoteNode.setAttribute('data-score-element-id', note.id);
     host.appendChild(fakeNoteNode);
 
     fakeNoteNode.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    expect(selection.selectedId()).toBe('abc-123');
+    expect(selection.selectedId()).toBe(note.id);
   });
 
   it('adds a note from a staff click when note-input mode is active and nothing was hit', () => {

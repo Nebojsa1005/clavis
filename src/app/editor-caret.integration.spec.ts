@@ -2,10 +2,11 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { App } from './app';
 import { CARET_CLASS, NotationRendererService } from './core/services/notation-renderer.service';
 import { PersistenceService } from './core/services/persistence.service';
-import { createEmptyScore, createMeasure, createNote, MeasureElement } from './core/models/score.model';
+import { createEmptyScore, createMeasure, createNote, MeasureElement, Step } from './core/models/score.model';
 import { CaretService } from './core/state/caret.service';
 import { NoteInputService } from './core/state/note-input.service';
 import { ScoreModelService } from './core/state/score-model.service';
+import { SelectionService } from './core/state/selection.service';
 
 /**
  * End-to-end checks of the caret / insert workflow against the real renderer in a real browser:
@@ -18,7 +19,7 @@ describe('Caret editing (integration)', () => {
   let noteInput: NoteInputService;
   let renderer: NotationRendererService;
 
-  const quarters = (...steps: ('C' | 'D' | 'E' | 'F' | 'G')[]): MeasureElement[] =>
+  const quarters = (...steps: Step[]): MeasureElement[] =>
     steps.map((step) => createNote(step, 4, 'quarter'));
 
   function setup(...measures: MeasureElement[][]): void {
@@ -180,6 +181,28 @@ describe('Caret editing (integration)', () => {
       expect(caret.position().tick).toBe(192);
     });
 
+    it('inserts a dotted element and advances the caret by its dotted length', () => {
+      setup(quarters('C', 'D'));
+      press('n');
+
+      press('.');
+      press(' ');
+
+      expect(scoreModel.score().measures[0].elements[0].dotted).toBeTrue();
+      expect(caret.position().tick).toBe(96);
+    });
+
+    it('inserts a 64th note with key 7', () => {
+      setup(quarters('C', 'D'));
+      press('n');
+
+      press('7');
+      press(' ');
+
+      expect(scoreModel.score().measures[0].elements[0].duration).toBe('sixtyfourth');
+      expect(caret.position().tick).toBe(4);
+    });
+
     it('is undone in one step and the caret stays on a valid stop', () => {
       setup(quarters('C', 'D'));
       press('n');
@@ -225,6 +248,267 @@ describe('Caret editing (integration)', () => {
 
       const first = scoreModel.score().measures[0].elements[0];
       expect(first.kind === 'note' && first.pitch.step).toBe('D');
+    });
+  });
+
+  describe('selection', () => {
+    let selection: SelectionService;
+
+    beforeEach(() => {
+      selection = TestBed.inject(SelectionService);
+    });
+
+    const noteNode = (index: number) =>
+      host().querySelectorAll('[data-score-element-id]')[index] as SVGGElement;
+    const idAt = (measureIndex: number, index: number) => scoreModel.score().measures[measureIndex].elements[index].id;
+    const centerX = (index: number) => {
+      const box = noteNode(index).getBoundingClientRect();
+      return box.left + box.width / 2;
+    };
+
+    function clickNode(index: number, modifiers: MouseEventInit = {}): void {
+      noteNode(index).dispatchEvent(new MouseEvent('click', { bubbles: true, ...modifiers }));
+      fixture.detectChanges();
+    }
+
+    function drag(fromX: number, toX: number): void {
+      const y = host().getBoundingClientRect().top + 60;
+      host().dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: fromX, clientY: y }));
+      document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: toX, clientY: y }));
+      fixture.detectChanges();
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: toX, clientY: y }));
+      fixture.detectChanges();
+    }
+
+    it('selects one element on click', () => {
+      setup(quarters('C', 'D', 'E'));
+
+      clickNode(1);
+
+      expect(selection.selectedIds()).toEqual([idAt(0, 1)]);
+    });
+
+    it('selects a contiguous range with shift+click', () => {
+      setup(quarters('C', 'D', 'E', 'F'));
+      clickNode(0);
+
+      clickNode(2, { shiftKey: true });
+
+      expect(selection.selectedIds()).toEqual([idAt(0, 0), idAt(0, 1), idAt(0, 2)]);
+    });
+
+    it('adds and removes single elements with ctrl+click', () => {
+      setup(quarters('C', 'D', 'E', 'F'));
+      clickNode(0);
+
+      clickNode(2, { ctrlKey: true });
+      expect(selection.selectedIds()).toEqual([idAt(0, 0), idAt(0, 2)]);
+
+      clickNode(0, { ctrlKey: true });
+      expect(selection.selectedIds()).toEqual([idAt(0, 2)]);
+    });
+
+    it('colors every selected element', () => {
+      setup(quarters('C', 'D', 'E'));
+      clickNode(0);
+      clickNode(2, { shiftKey: true });
+
+      const filled = Array.from(host().querySelectorAll('[data-score-element-id]')).filter(
+        (node) => node.getAttribute('fill') === '#3b5bfd',
+      );
+      expect(filled.length).toBe(3);
+    });
+
+    it('selects the whole measure when clicking empty staff outside note input', () => {
+      setup(quarters('C', 'D', 'E', 'F'), quarters('G', 'C'));
+      const second = renderer.getCaretX({ measureIndex: 1, voice: 0, tick: 0 })!;
+      const rect = host().getBoundingClientRect();
+
+      host().dispatchEvent(
+        new MouseEvent('click', { bubbles: true, clientX: rect.left + second + 5, clientY: rect.top + 20 }),
+      );
+      fixture.detectChanges();
+
+      expect(selection.selectedIds()).toEqual([idAt(1, 0), idAt(1, 1)]);
+    });
+
+    it('does not select a measure on empty-staff clicks while entering notes', () => {
+      setup(quarters('C', 'D'));
+      press('n');
+      const rect = host().getBoundingClientRect();
+
+      host().dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: rect.left + 100, clientY: rect.top + 80 }));
+      fixture.detectChanges();
+
+      expect(selection.count()).toBe(0);
+    });
+
+    it('selects the elements under a drag and shows a rubber band meanwhile', () => {
+      setup(quarters('C', 'D', 'E', 'F'));
+      const y = host().getBoundingClientRect().top + 60;
+
+      host().dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: centerX(1) - 3, clientY: y }),
+      );
+      document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: centerX(2) + 3, clientY: y }));
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.selection-box')).not.toBeNull();
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: centerX(2) + 3, clientY: y }));
+      fixture.detectChanges();
+
+      expect(selection.selectedIds()).toEqual([idAt(0, 1), idAt(0, 2)]);
+      expect(fixture.nativeElement.querySelector('.selection-box')).toBeNull();
+    });
+
+    it('treats a tiny pointer move as a click, not a drag', () => {
+      setup(quarters('C', 'D', 'E'));
+
+      drag(centerX(1), centerX(1) + 2);
+      clickNode(1);
+
+      expect(selection.selectedIds()).toEqual([idAt(0, 1)]);
+    });
+
+    it('does not turn the click that ends a drag into a measure selection', () => {
+      setup(quarters('C', 'D', 'E', 'F'));
+      const y = host().getBoundingClientRect().top + 60;
+      const endX = centerX(2) + 3;
+
+      drag(centerX(1) - 3, endX);
+      host().dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: endX, clientY: y }));
+      fixture.detectChanges();
+
+      expect(selection.selectedIds()).toEqual([idAt(0, 1), idAt(0, 2)]);
+    });
+
+    it('does not start a drag selection while entering notes', () => {
+      setup(quarters('C', 'D', 'E'));
+      press('n');
+
+      drag(centerX(0), centerX(2));
+
+      expect(selection.count()).toBe(0);
+    });
+
+    it('selects everything with Ctrl+A and clears with Escape outside note input', () => {
+      setup(quarters('C', 'D'), quarters('E'));
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true }));
+      expect(selection.count()).toBe(3);
+
+      press('Escape');
+      expect(selection.count()).toBe(0);
+    });
+
+    it('drops selected elements that disappear after undo', () => {
+      setup(quarters('C', 'D'));
+      press('n');
+      press(' ');
+      press('Escape');
+      selection.selectAll();
+      expect(selection.count()).toBe(3);
+
+      scoreModel.undo();
+
+      expect(selection.count()).toBe(2);
+    });
+  });
+
+  describe('range operations', () => {
+    let selection: SelectionService;
+
+    beforeEach(() => {
+      selection = TestBed.inject(SelectionService);
+    });
+
+    const nodes = () => host().querySelectorAll('[data-score-element-id]');
+    const clickNode = (index: number, modifiers: MouseEventInit = {}) => {
+      nodes()[index].dispatchEvent(new MouseEvent('click', { bubbles: true, ...modifiers }));
+      fixture.detectChanges();
+    };
+    const ctrl = (key: string) => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey: true }));
+      fixture.detectChanges();
+    };
+    const all = () => scoreModel.score().measures.flatMap((m) => m.elements.map((el) => (el.kind === 'note' ? el.pitch.step : 'r')));
+
+    it('deletes a shift-selected range with the Delete key', () => {
+      setup(quarters('C', 'D', 'E', 'F'));
+      clickNode(1);
+      clickNode(2, { shiftKey: true });
+
+      press('Delete');
+
+      expect(all()).toEqual(['C', 'F']);
+      expect(selection.count()).toBe(0);
+      expect(nodes().length).toBe(2);
+    });
+
+    it('deletes a whole measure picked by clicking empty staff', () => {
+      setup(quarters('C', 'D', 'E', 'F'), quarters('G', 'A'));
+      const secondMeasureX = renderer.getCaretX({ measureIndex: 1, voice: 0, tick: 0 })!;
+      const rect = host().getBoundingClientRect();
+      host().dispatchEvent(
+        new MouseEvent('click', { bubbles: true, clientX: rect.left + secondMeasureX + 5, clientY: rect.top + 20 }),
+      );
+      fixture.detectChanges();
+
+      press('Backspace');
+
+      expect(all()).toEqual(['C', 'D', 'E', 'F']);
+      expect(scoreModel.score().measures.length).toBe(1);
+    });
+
+    it('copies a selection and pastes it at the caret', () => {
+      setup(quarters('C', 'D', 'E', 'F'));
+      clickNode(0);
+      clickNode(1, { shiftKey: true });
+      ctrl('c');
+      press('Escape');
+      press('n');
+      caret.moveToEnd();
+
+      ctrl('v');
+
+      expect(all()).toEqual(['C', 'D', 'E', 'F', 'C', 'D']);
+      expect(selection.count()).toBe(2);
+    });
+
+    it('cuts and pastes elsewhere', () => {
+      setup(quarters('C', 'D', 'E', 'F'));
+      clickNode(0);
+      ctrl('x');
+      expect(all()).toEqual(['D', 'E', 'F']);
+
+      selection.select(scoreModel.score().measures[0].elements[2].id);
+      ctrl('v');
+
+      expect(all()).toEqual(['D', 'E', 'C', 'F']);
+    });
+
+    it('undoes a paste in a single step', () => {
+      setup(quarters('C', 'D'));
+      clickNode(0);
+      clickNode(1, { shiftKey: true });
+      ctrl('c');
+      ctrl('v');
+      expect(all().length).toBe(4);
+
+      ctrl('z');
+
+      expect(all()).toEqual(['C', 'D']);
+    });
+
+    it('ignores editor shortcuts typed into the tempo field', () => {
+      setup(quarters('C', 'D', 'E'));
+      clickNode(0);
+      const bpm = fixture.nativeElement.querySelector('.bpm-input') as HTMLInputElement;
+
+      bpm.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+      bpm.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }));
+
+      expect(all()).toEqual(['C', 'D', 'E']);
+      expect(noteInput.active()).toBeFalse();
     });
   });
 

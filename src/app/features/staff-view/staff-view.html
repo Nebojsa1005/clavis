@@ -1,6 +1,12 @@
-<div
-  class="staff-canvas"
-  [class.input-active]="noteInput.active()"
-  #canvasHost
-  (click)="onCanvasClick($event)"
-></div>
+<div class="staff-wrap">
+  <div
+    class="staff-canvas"
+    [class.input-active]="noteInput.active()"
+    #canvasHost
+    (click)="onCanvasClick($event)"
+    (mousedown)="onCanvasMouseDown($event)"
+  ></div>
+  @if (selectionBox(); as box) {
+    <div class="selection-box" [style.left.px]="box.left" [style.width.px]="box.width"></div>
+  }
+</div>

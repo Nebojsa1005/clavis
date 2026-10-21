@@ -1,9 +1,20 @@
-import { ChangeDetectionStrategy, Component, ElementRef, effect, inject, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  effect,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { NotationRendererService, SCORE_ELEMENT_ID_ATTR } from '../../core/services/notation-renderer.service';
 import { CaretService } from '../../core/state/caret.service';
 import { NoteInputService } from '../../core/state/note-input.service';
 import { ScoreModelService } from '../../core/state/score-model.service';
 import { SelectionService } from '../../core/state/selection.service';
+
+/** Pointer travel (px) before a press on the staff turns into a drag selection instead of a click. */
+const DRAG_THRESHOLD_PX = 4;
 
 @Component({
   selector: 'app-staff-view',
@@ -20,25 +31,61 @@ export class StaffView {
 
   protected readonly canvasHost = viewChild<ElementRef<HTMLDivElement>>('canvasHost');
 
+  /** Rubber-band rectangle while dragging a selection, in px relative to the canvas. */
+  protected readonly selectionBox = signal<{ left: number; width: number } | null>(null);
+
+  private dragStartX: number | null = null;
+  private dragging = false;
+  private suppressNextClick = false;
+
   constructor() {
     effect(() => {
       const score = this.scoreModel.score();
-      const selectedId = this.selection.selectedId();
+      const selectedIds = new Set(this.selection.selectedIds());
       // The caret is only meaningful (and visible) while note input mode is on.
       const caret = this.noteInput.active() ? this.caretService.position() : null;
       const host = this.canvasHost()?.nativeElement;
       if (!host) {
         return;
       }
-      this.notationRenderer.render(host, score, selectedId, caret);
+      this.notationRenderer.render(host, score, selectedIds, caret);
     });
   }
 
+  protected onCanvasMouseDown(event: MouseEvent): void {
+    // While entering notes a press is always a click that inserts, never a selection drag.
+    if (event.button !== 0 || this.noteInput.active()) {
+      return;
+    }
+    this.dragStartX = event.clientX;
+    this.dragging = false;
+
+    const onMove = (move: MouseEvent) => this.onDragMove(move);
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      this.endDrag();
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
   protected onCanvasClick(event: MouseEvent): void {
+    if (this.suppressNextClick) {
+      return;
+    }
+
     const target = event.target as Element | null;
     const hit = target?.closest(`[${SCORE_ELEMENT_ID_ATTR}]`);
     if (hit) {
-      this.selection.select(hit.getAttribute(SCORE_ELEMENT_ID_ATTR)!);
+      const id = hit.getAttribute(SCORE_ELEMENT_ID_ATTR)!;
+      if (event.shiftKey) {
+        this.selection.extendTo(id);
+      } else if (event.ctrlKey || event.metaKey) {
+        this.selection.toggle(id);
+      } else {
+        this.selection.select(id);
+      }
       return;
     }
 
@@ -47,12 +94,56 @@ export class StaffView {
       return;
     }
     const rect = host.getBoundingClientRect();
-    const y = event.clientY - rect.top;
     const position = this.notationRenderer.caretFromX(event.clientX - rect.left);
+
+    if (!this.noteInput.active()) {
+      // Outside note input a click on empty staff selects the whole measure under the pointer.
+      if (position) {
+        this.selection.selectMeasure(position.measureIndex, event.shiftKey);
+      }
+      return;
+    }
+
     if (position) {
       this.caretService.setPosition(position);
     }
+    const y = event.clientY - rect.top;
     const geometry = this.notationRenderer.getStaffGeometry();
     this.noteInput.enterPitchFromClick(this.scoreModel.score().clef, y, geometry.topLineY, geometry.halfStepPx);
+  }
+
+  private onDragMove(event: MouseEvent): void {
+    const host = this.canvasHost()?.nativeElement;
+    if (this.dragStartX === null || !host) {
+      return;
+    }
+    if (!this.dragging && Math.abs(event.clientX - this.dragStartX) < DRAG_THRESHOLD_PX) {
+      return;
+    }
+    this.dragging = true;
+
+    const left = Math.min(this.dragStartX, event.clientX);
+    const right = Math.max(this.dragStartX, event.clientX);
+    const hostLeft = host.getBoundingClientRect().left;
+    this.selectionBox.set({ left: left - hostLeft, width: right - left });
+
+    const ids = Array.from(host.querySelectorAll(`[${SCORE_ELEMENT_ID_ATTR}]`))
+      .filter((node) => {
+        const box = node.getBoundingClientRect();
+        return box.right >= left && box.left <= right;
+      })
+      .map((node) => node.getAttribute(SCORE_ELEMENT_ID_ATTR)!);
+    this.selection.selectMany(ids);
+  }
+
+  private endDrag(): void {
+    if (this.dragging) {
+      // The browser still fires a click after the mouseup that ended the drag; ignore that one.
+      this.suppressNextClick = true;
+      setTimeout(() => (this.suppressNextClick = false));
+    }
+    this.dragStartX = null;
+    this.dragging = false;
+    this.selectionBox.set(null);
   }
 }

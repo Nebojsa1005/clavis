@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { createEmptyScore, createMeasure, createNote } from '../models/score.model';
+import { KEY_SIGNATURE_OPTIONS } from '../models/key-signature.util';
+import { CLEFS, createEmptyScore, createMeasure, createNote, createRest } from '../models/score.model';
 import { NotationRendererService, CARET_CLASS, SCORE_ELEMENT_ID_ATTR } from './notation-renderer.service';
 
 describe('NotationRendererService', () => {
@@ -25,6 +26,67 @@ describe('NotationRendererService', () => {
     const svg = container.querySelector('svg');
     expect(svg).withContext('VexFlow treba da ubaci <svg> u kontejner').not.toBeNull();
     expect(container.querySelectorAll('.vf-stavenote').length).toBeGreaterThan(0);
+  });
+
+  it('renders notes for every supported clef', () => {
+    for (const clef of CLEFS) {
+      const score = { ...createEmptyScore(clef) };
+      score.measures[0].elements.push(createNote('C', 4, 'quarter'));
+
+      service.render(container, score);
+
+      expect(container.querySelectorAll('.vf-stavenote').length).withContext(clef).toBe(1);
+    }
+  });
+
+  it('draws a key signature for every supported key', () => {
+    for (const option of KEY_SIGNATURE_OPTIONS) {
+      const score = { ...createEmptyScore(), keySignature: option.value };
+      score.measures[0].elements.push(createNote('C', 4, 'quarter'));
+
+      service.render(container, score);
+
+      expect(container.querySelectorAll('.vf-stavenote').length).withContext(option.value).toBe(1);
+    }
+  });
+
+  it('highlights every element in a multi-selection and nothing else', () => {
+    const score = createEmptyScore();
+    const [a, b, c] = ['C', 'D', 'E'].map((step) => createNote(step as 'C', 4, 'quarter'));
+    score.measures[0].elements.push(a, b, c);
+
+    service.render(container, score, new Set([a.id, c.id]));
+
+    const fillOf = (id: string) =>
+      (container.querySelector(`[${SCORE_ELEMENT_ID_ATTR}="${id}"]`) as SVGElement).getAttribute('fill');
+    expect(fillOf(a.id)).toBe('#3b5bfd');
+    expect(fillOf(c.id)).toBe('#3b5bfd');
+    expect(fillOf(b.id)).not.toBe('#3b5bfd');
+  });
+
+  it('draws an extra element (the augmentation dot) for each dotted note and rest', () => {
+    // VexFlow gives the dot no class of its own, so compare what is drawn inside the note groups.
+    const drawnPerNote = (dotted: boolean) => {
+      const score = createEmptyScore();
+      score.measures[0].elements.push(createNote('C', 4, 'quarter', null, dotted), createRest('quarter', dotted));
+      service.render(container, score);
+      return Array.from(container.querySelectorAll('.vf-stavenote')).map((el) => el.querySelectorAll('*').length);
+    };
+
+    const plain = drawnPerNote(false);
+    const dotted = drawnPerNote(true);
+
+    expect(dotted[0]).toBeGreaterThan(plain[0]);
+    expect(dotted[1]).toBeGreaterThan(plain[1]);
+  });
+
+  it('renders 32nd and 64th notes', () => {
+    const score = createEmptyScore();
+    score.measures[0].elements.push(createNote('C', 4, 'thirtysecond'), createNote('D', 4, 'sixtyfourth'));
+
+    service.render(container, score);
+
+    expect(container.querySelectorAll('.vf-stavenote').length).toBe(2);
   });
 
   it('clears previous render before drawing again', () => {
@@ -55,7 +117,7 @@ describe('NotationRendererService', () => {
     const note = createNote('C', 4, 'quarter');
     score.measures[0].elements.push(note);
 
-    service.render(container, score, note.id);
+    service.render(container, score, new Set([note.id]));
 
     const tagged = container.querySelector(`[${SCORE_ELEMENT_ID_ATTR}="${note.id}"]`) as SVGElement;
     expect(tagged.getAttribute('fill')).toBe('#3b5bfd');
@@ -77,7 +139,7 @@ describe('NotationRendererService', () => {
     });
 
     it('draws exactly one caret line when a position is passed', () => {
-      service.render(container, scoreWithQuarters(2), null, { measureIndex: 0, voice: 0, tick: 64 });
+      service.render(container, scoreWithQuarters(2), new Set(), { measureIndex: 0, voice: 0, tick: 64 });
 
       expect(container.querySelectorAll(`.${CARET_CLASS}`).length).toBe(1);
     });
@@ -108,7 +170,7 @@ describe('NotationRendererService', () => {
     });
 
     it('supports a caret in an empty measure', () => {
-      service.render(container, createEmptyScore(), null, { measureIndex: 0, voice: 0, tick: 0 });
+      service.render(container, createEmptyScore(), new Set(), { measureIndex: 0, voice: 0, tick: 0 });
 
       expect(container.querySelectorAll(`.${CARET_CLASS}`).length).toBe(1);
     });

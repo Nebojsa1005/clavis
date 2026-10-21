@@ -1,7 +1,9 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { insertWithReflow } from '../models/insert.util';
+import { changeTimeSignature, insertManyWithReflow, insertWithReflow } from '../models/insert.util';
 import { durationToBeats, stepDiatonic } from '../models/notation.util';
-import { createMeasure, createTestScore, MeasureElement, Score } from '../models/score.model';
+import { Clef, createMeasure, createTestScore, MeasureElement, Score, TimeSignature } from '../models/score.model';
+import { isKeySignature } from '../models/key-signature.util';
+import { validateTimeSignature } from '../models/time-signature.util';
 
 const MAX_HISTORY = 20;
 
@@ -31,8 +33,8 @@ export class ScoreModelService {
     this.mutate((score) => {
       const measures = score.measures.map((measure) => ({ ...measure, elements: [...measure.elements] }));
       const last = measures[measures.length - 1];
-      const usedBeats = last.elements.reduce((sum, el) => sum + durationToBeats(el.duration, score.timeSignature), 0);
-      const elementBeats = durationToBeats(element.duration, score.timeSignature);
+      const usedBeats = last.elements.reduce((sum, el) => sum + durationToBeats(el.duration, score.timeSignature, el.dotted), 0);
+      const elementBeats = durationToBeats(element.duration, score.timeSignature, element.dotted);
 
       if (usedBeats + elementBeats <= score.timeSignature.numerator + 1e-6) {
         last.elements.push(element);
@@ -44,9 +46,52 @@ export class ScoreModelService {
     });
   }
 
+  /** Changes the clef. Notes keep their pitch; only how they are drawn and entered changes. */
+  setClef(clef: Clef): void {
+    if (clef === this.scoreState().clef) {
+      return;
+    }
+    this.mutate((score) => ({ ...score, clef }));
+  }
+
+  /** Changes the key signature. Returns false (and changes nothing) for an unknown key. */
+  setKeySignature(keySignature: string): boolean {
+    if (!isKeySignature(keySignature)) {
+      return false;
+    }
+    if (keySignature !== this.scoreState().keySignature) {
+      this.mutate((score) => ({ ...score, keySignature }));
+    }
+    return true;
+  }
+
+  /**
+   * Changes the time signature; measures that no longer fit spill into the following ones.
+   * Returns false (and changes nothing) for an invalid time signature.
+   */
+  setTimeSignature(timeSignature: TimeSignature): boolean {
+    if (validateTimeSignature(timeSignature.numerator, timeSignature.denominator) !== null) {
+      return false;
+    }
+    const current = this.scoreState().timeSignature;
+    if (current.numerator === timeSignature.numerator && current.denominator === timeSignature.denominator) {
+      return true;
+    }
+    this.mutate((score) => changeTimeSignature(score, timeSignature));
+    return true;
+  }
+
   /** Inserts an element before `index` in a measure; overflow spills into the following measures. */
   insertElement(measureIndex: number, index: number, element: MeasureElement): void {
     this.mutate((score) => insertWithReflow(score, measureIndex, index, element));
+  }
+
+  /** Inserts several elements in order as ONE undo step; see `insertManyWithReflow`. */
+  insertElements(measureIndex: number, index: number, elements: readonly MeasureElement[]): void {
+    if (elements.length === 0) {
+      return;
+    }
+    this.mutate((score) => insertManyWithReflow(score, measureIndex, index, elements));
   }
 
   /**
@@ -74,13 +119,30 @@ export class ScoreModelService {
     });
   }
 
-  /** Briše element (notu/pauzu) po id-u, gde god u partituri da se nalazi. */
+  /** Removes an element (note or rest) by id, wherever it is in the score. */
   deleteElement(id: string): void {
+    this.deleteElements([id]);
+  }
+
+  /**
+   * Removes several elements as ONE undo step. Later elements move up; measures that end up empty
+   * at the end of the score are dropped (the first measure always stays). Unknown ids are ignored.
+   */
+  deleteElements(ids: readonly string[]): void {
+    const doomed = new Set(ids);
+    const exists = this.scoreState().measures.some((measure) => measure.elements.some((el) => doomed.has(el.id)));
+    if (!exists) {
+      return;
+    }
+
     this.mutate((score) => {
       const measures = score.measures.map((measure) => ({
         ...measure,
-        elements: measure.elements.filter((el) => el.id !== id),
+        elements: measure.elements.filter((el) => !doomed.has(el.id)),
       }));
+      while (measures.length > 1 && measures[measures.length - 1].elements.length === 0) {
+        measures.pop();
+      }
       return { ...score, measures };
     });
   }

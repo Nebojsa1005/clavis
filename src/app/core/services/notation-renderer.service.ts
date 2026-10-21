@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Accidental, Formatter, Renderer, Stave, StaveNote, Voice } from 'vexflow';
+import { Accidental, Dot, Formatter, Renderer, Stave, StaveNote, Voice } from 'vexflow';
 import { CaretPosition, elementBoundaries } from '../models/caret.util';
 import { Measure, MeasureElement, NoteDuration, Score } from '../models/score.model';
 
@@ -9,6 +9,8 @@ const VEXFLOW_DURATION: Record<NoteDuration, string> = {
   quarter: 'q',
   eighth: '8',
   sixteenth: '16',
+  thirtysecond: '32',
+  sixtyfourth: '64',
 };
 
 const VEXFLOW_ACCIDENTAL: Record<'sharp' | 'flat' | 'natural', string> = {
@@ -103,7 +105,7 @@ export class NotationRendererService {
   render(
     container: HTMLDivElement,
     score: Score,
-    selectedId: string | null = null,
+    selectedIds: ReadonlySet<string> = new Set(),
     caret: CaretPosition | null = null,
   ): void {
     container.replaceChildren();
@@ -118,7 +120,7 @@ export class NotationRendererService {
 
     let x = STAVE_MARGIN_X;
     score.measures.forEach((measure, index) => {
-      this.renderMeasure(context, measure, score, x, index === 0, selectedId);
+      this.renderMeasure(context, measure, score, x, index === 0, selectedIds);
       x += STAVE_WIDTH;
     });
 
@@ -153,7 +155,7 @@ export class NotationRendererService {
     score: Score,
     x: number,
     isFirst: boolean,
-    selectedId: string | null,
+    selectedIds: ReadonlySet<string>,
   ): void {
     const stave = new Stave(x, STAVE_Y, STAVE_WIDTH);
     if (isFirst) {
@@ -168,7 +170,7 @@ export class NotationRendererService {
     const idByNote = new Map<StaveNote, string>();
     const tickables = measure.elements.map((el) => {
       const note = this.toStaveNote(el, score.clef);
-      if (el.id === selectedId) {
+      if (selectedIds.has(el.id)) {
         note.setStyle({ fillStyle: SELECTED_NOTE_COLOR, strokeStyle: SELECTED_NOTE_COLOR });
       }
       idByNote.set(note, el.id);
@@ -199,16 +201,24 @@ export class NotationRendererService {
   }
 
   private toStaveNote(element: MeasureElement, clef: Score['clef']): StaveNote {
-    const duration = VEXFLOW_DURATION[element.duration];
+    // VexFlow encodes a dot in the duration string ("qd" = dotted quarter) and draws it via Dot.
+    const duration = VEXFLOW_DURATION[element.duration] + (element.dotted ? 'd' : '');
 
     if (element.kind === 'rest') {
-      return new StaveNote({ keys: ['b/4'], duration: `${duration}r`, clef });
+      const rest = new StaveNote({ keys: ['b/4'], duration: `${duration}r`, clef });
+      if (element.dotted) {
+        Dot.buildAndAttach([rest], { all: true });
+      }
+      return rest;
     }
 
     const key = `${element.pitch.step.toLowerCase()}/${element.pitch.octave}`;
     const note = new StaveNote({ keys: [key], duration, clef });
     if (element.pitch.accidental) {
       note.addModifier(new Accidental(VEXFLOW_ACCIDENTAL[element.pitch.accidental]));
+    }
+    if (element.dotted) {
+      Dot.buildAndAttach([note], { all: true });
     }
     return note;
   }

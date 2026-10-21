@@ -1,17 +1,25 @@
 import { ChangeDetectionStrategy, Component, HostListener, inject, signal } from '@angular/core';
-import { createEmptyScore, NoteDuration } from './core/models/score.model';
+import { Clef, CLEFS, createEmptyScore, NoteDuration } from './core/models/score.model';
 import { ExportService } from './core/services/export.service';
 import { PersistenceService } from './core/services/persistence.service';
 import { PlaybackService } from './core/services/playback.service';
 import { CaretService } from './core/state/caret.service';
+import { EditingService } from './core/state/editing.service';
 import { NoteInputService } from './core/state/note-input.service';
 import { ScoreModelService } from './core/state/score-model.service';
 import { SelectionService } from './core/state/selection.service';
+import { KeySignatureControl } from './features/key-signature-control/key-signature-control';
 import { StaffView } from './features/staff-view/staff-view';
+import { TimeSignatureControl } from './features/time-signature-control/time-signature-control';
 
 interface DurationOption {
   value: NoteDuration;
   key: string;
+  label: string;
+}
+
+interface ClefOption {
+  value: Clef;
   label: string;
 }
 
@@ -21,11 +29,13 @@ const KEY_DURATION_MAP: Record<string, NoteDuration> = {
   '3': 'quarter',
   '4': 'eighth',
   '5': 'sixteenth',
+  '6': 'thirtysecond',
+  '7': 'sixtyfourth',
 };
 
 @Component({
   selector: 'app-root',
-  imports: [StaffView],
+  imports: [KeySignatureControl, StaffView, TimeSignatureControl],
   templateUrl: './app.html',
   styleUrl: './app.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -36,6 +46,7 @@ export class App {
   protected readonly scoreModel = inject(ScoreModelService);
   protected readonly selection = inject(SelectionService);
   private readonly caret = inject(CaretService);
+  private readonly editing = inject(EditingService);
   protected readonly playback = inject(PlaybackService);
   private readonly exportService = inject(ExportService);
   private readonly persistence = inject(PersistenceService);
@@ -46,6 +57,15 @@ export class App {
     { value: 'quarter', key: '3', label: 'Četvrtina' },
     { value: 'eighth', key: '4', label: 'Osminka' },
     { value: 'sixteenth', key: '5', label: 'Šesnaestinka' },
+    { value: 'thirtysecond', key: '6', label: 'Tridesetdvojina' },
+    { value: 'sixtyfourth', key: '7', label: 'Šezdesetčetvrtina' },
+  ];
+
+  protected readonly clefOptions: ClefOption[] = [
+    { value: 'treble', label: 'Violinski (G)' },
+    { value: 'bass', label: 'Bas (F)' },
+    { value: 'alto', label: 'Alt (C)' },
+    { value: 'tenor', label: 'Tenor (C)' },
   ];
 
   constructor() {
@@ -65,6 +85,19 @@ export class App {
 
   protected onSelectDuration(duration: NoteDuration): void {
     this.noteInput.setDuration(duration);
+  }
+
+  protected onToggleDotted(): void {
+    this.noteInput.toggleDotted();
+  }
+
+  protected onClefChange(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    if (CLEFS.includes(select.value as Clef)) {
+      this.scoreModel.setClef(select.value as Clef);
+    }
+    // Hand focus back so arrow keys keep driving the caret instead of the dropdown.
+    select.blur();
   }
 
   protected onUndo(): void {
@@ -143,6 +176,12 @@ export class App {
 
   @HostListener('document:keydown', ['$event'])
   protected onKeydown(event: KeyboardEvent): void {
+    // Typing in the tempo field or using a dropdown must not trigger editor shortcuts.
+    const target = event.target;
+    if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) {
+      return;
+    }
+
     if (event.key.toLowerCase() === 'n') {
       this.noteInput.toggle();
       event.preventDefault();
@@ -161,14 +200,43 @@ export class App {
       return;
     }
 
+    if (event.ctrlKey && event.key.toLowerCase() === 'a' && !this.noteInput.active()) {
+      this.selection.selectAll();
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key === 'Escape' && !this.noteInput.active()) {
+      this.selection.clear();
+      return;
+    }
+
     if (event.key === 'Delete' || event.key === 'Backspace') {
-      const id = this.selection.selectedId();
-      if (id) {
-        this.scoreModel.deleteElement(id);
-        this.selection.clear();
+      if (this.selection.count() > 0) {
+        this.editing.deleteSelection();
         event.preventDefault();
       }
       return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey) {
+      switch (event.key.toLowerCase()) {
+        case 'c':
+          if (this.editing.copySelection()) {
+            event.preventDefault();
+          }
+          return;
+        case 'x':
+          if (this.selection.count() > 0) {
+            this.editing.cutSelection();
+            event.preventDefault();
+          }
+          return;
+        case 'v':
+          this.editing.paste();
+          event.preventDefault();
+          return;
+      }
     }
 
     if (!this.noteInput.active()) {
@@ -188,6 +256,10 @@ export class App {
         break;
       case 'ArrowRight':
         this.caret.moveRight();
+        event.preventDefault();
+        break;
+      case '.':
+        this.noteInput.toggleDotted();
         event.preventDefault();
         break;
       case 'ArrowUp':

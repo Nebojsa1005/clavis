@@ -1,20 +1,14 @@
 import { Injectable, inject } from '@angular/core';
 import MidiWriter from 'midi-writer-js';
+import { elementTicks, TICKS_PER_WHOLE } from '../models/caret.util';
+import { effectiveAccidental, findKeySignature } from '../models/key-signature.util';
 import { toToneNoteName } from '../models/notation.util';
 import { AccidentalValue, Measure, MeasureElement, NoteDuration, Score } from '../models/score.model';
 import { triggerDownload } from '../utils/download.util';
 import { NotationRendererService } from './notation-renderer.service';
 
-/** XML-ski broj "divisions" po četvrtinki; mora deliti sve naše trajanja na cele brojeve. */
-const MUSICXML_DIVISIONS = 4;
-
-const MUSICXML_DURATION_UNITS: Record<NoteDuration, number> = {
-  whole: 16,
-  half: 8,
-  quarter: 4,
-  eighth: 2,
-  sixteenth: 1,
-};
+/** MusicXML "divisions" per quarter note; 32 keeps even a dotted 64th (3 divisions) an integer. */
+const MUSICXML_DIVISIONS = 32;
 
 const MUSICXML_TYPE: Record<NoteDuration, string> = {
   whole: 'whole',
@@ -22,29 +16,15 @@ const MUSICXML_TYPE: Record<NoteDuration, string> = {
   quarter: 'quarter',
   eighth: 'eighth',
   sixteenth: '16th',
+  thirtysecond: '32nd',
+  sixtyfourth: '64th',
 };
 
 const MUSICXML_CLEF: Record<Score['clef'], { sign: string; line: number }> = {
   treble: { sign: 'G', line: 2 },
   bass: { sign: 'F', line: 4 },
-};
-
-const MUSICXML_FIFTHS_BY_KEY: Record<string, number> = {
-  C: 0,
-  G: 1,
-  D: 2,
-  A: 3,
-  E: 4,
-  B: 5,
-  'F#': 6,
-  'C#': 7,
-  F: -1,
-  Bb: -2,
-  Eb: -3,
-  Ab: -4,
-  Db: -5,
-  Gb: -6,
-  Cb: -7,
+  alto: { sign: 'C', line: 3 },
+  tenor: { sign: 'C', line: 4 },
 };
 
 const MUSICXML_ALTER: Record<Exclude<AccidentalValue, null>, number> = {
@@ -60,6 +40,8 @@ const MIDI_DURATION_TOKEN: Record<NoteDuration, string> = {
   quarter: '4',
   eighth: '8',
   sixteenth: '16',
+  thirtysecond: '32',
+  sixtyfourth: '64',
 };
 
 /**
@@ -72,9 +54,9 @@ export class ExportService {
 
   toMusicXml(score: Score): string {
     const clef = MUSICXML_CLEF[score.clef];
-    const fifths = MUSICXML_FIFTHS_BY_KEY[score.keySignature] ?? 0;
+    const key = findKeySignature(score.keySignature) ?? { fifths: 0, mode: 'major' as const };
     const measuresXml = score.measures
-      .map((measure, index) => this.measureToXml(measure, score, index, clef, fifths))
+      .map((measure, index) => this.measureToXml(measure, score, index, clef, key))
       .join('\n');
 
     return [
@@ -100,14 +82,15 @@ export class ExportService {
     let pendingWait: string[] = [];
     for (const measure of score.measures) {
       for (const element of measure.elements) {
-        const token = MIDI_DURATION_TOKEN[element.duration];
+        // midi-writer-js marks a dotted duration with a leading "d" ("d4" = dotted quarter).
+        const token = (element.dotted ? 'd' : '') + MIDI_DURATION_TOKEN[element.duration];
         if (element.kind === 'rest') {
           pendingWait.push(token);
           continue;
         }
         track.addEvent(
           new MidiWriter.NoteEvent({
-            pitch: [toToneNoteName(element.pitch)],
+            pitch: [toToneNoteName(element.pitch, score.keySignature)],
             duration: token,
             wait: pendingWait.length > 0 ? pendingWait : undefined,
           }),
@@ -170,14 +153,14 @@ export class ExportService {
     score: Score,
     index: number,
     clef: { sign: string; line: number },
-    fifths: number,
+    key: { fifths: number; mode: 'major' | 'minor' },
   ): string {
-    const notesXml = measure.elements.map((el) => this.elementToXml(el)).join('\n');
+    const notesXml = measure.elements.map((el) => this.elementToXml(el, score.keySignature)).join('\n');
     const attributes =
       index === 0
         ? `      <attributes>
         <divisions>${MUSICXML_DIVISIONS}</divisions>
-        <key><fifths>${fifths}</fifths></key>
+        <key><fifths>${key.fifths}</fifths><mode>${key.mode}</mode></key>
         <time><beats>${score.timeSignature.numerator}</beats><beat-type>${score.timeSignature.denominator}</beat-type></time>
         <clef><sign>${clef.sign}</sign><line>${clef.line}</line></clef>
       </attributes>\n`
@@ -186,15 +169,18 @@ export class ExportService {
     return `    <measure number="${index + 1}">\n${attributes}${notesXml}\n    </measure>`;
   }
 
-  private elementToXml(element: MeasureElement): string {
-    const duration = MUSICXML_DURATION_UNITS[element.duration];
+  private elementToXml(element: MeasureElement, keySignature: string): string {
+    const duration = (elementTicks(element) * MUSICXML_DIVISIONS * 4) / TICKS_PER_WHOLE;
     const type = MUSICXML_TYPE[element.duration];
+    const dotXml = element.dotted ? '\n        <dot/>' : '';
 
     if (element.kind === 'rest') {
-      return `      <note>\n        <rest/>\n        <duration>${duration}</duration>\n        <type>${type}</type>\n      </note>`;
+      return `      <note>\n        <rest/>\n        <duration>${duration}</duration>\n        <type>${type}</type>${dotXml}\n      </note>`;
     }
 
-    const alter = element.pitch.accidental ? MUSICXML_ALTER[element.pitch.accidental] : 0;
+    // <alter> is the sounding alteration (key signature included); <accidental> only what is written.
+    const sounding = effectiveAccidental(element.pitch.accidental, keySignature, element.pitch.step);
+    const alter = sounding ? MUSICXML_ALTER[sounding] : 0;
     const alterXml = alter !== 0 ? `\n          <alter>${alter}</alter>` : '';
     const accidentalXml = element.pitch.accidental
       ? `\n        <accidental>${element.pitch.accidental}</accidental>`
@@ -207,7 +193,7 @@ export class ExportService {
       `          <octave>${element.pitch.octave}</octave>`,
       '        </pitch>',
       `        <duration>${duration}</duration>`,
-      `        <type>${type}</type>${accidentalXml}`,
+      `        <type>${type}</type>${dotXml}${accidentalXml}`,
       '      </note>',
     ].join('\n');
   }

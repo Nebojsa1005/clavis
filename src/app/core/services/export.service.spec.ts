@@ -17,13 +17,46 @@ describe('ExportService', () => {
       const xml = service.toMusicXml(score);
 
       expect(xml).toContain('<score-partwise version="4.0">');
-      expect(xml).toContain('<divisions>4</divisions>');
+      expect(xml).toContain('<divisions>32</divisions>');
       expect(xml).toContain('<time><beats>4</beats><beat-type>4</beat-type></time>');
       expect(xml).toContain('<clef><sign>G</sign><line>2</line></clef>');
       expect(xml).toContain('<step>C</step>');
       expect(xml).toContain('<octave>4</octave>');
-      expect(xml).toContain('<duration>4</duration>');
+      expect(xml).toContain('<duration>32</duration>');
       expect(xml).toContain('<type>quarter</type>');
+    });
+
+    it('writes the clef sign and line for every clef', () => {
+      const expected = {
+        treble: '<clef><sign>G</sign><line>2</line></clef>',
+        bass: '<clef><sign>F</sign><line>4</line></clef>',
+        alto: '<clef><sign>C</sign><line>3</line></clef>',
+        tenor: '<clef><sign>C</sign><line>4</line></clef>',
+      } as const;
+
+      for (const [clef, xml] of Object.entries(expected)) {
+        const score = { ...createEmptyScore(), clef: clef as keyof typeof expected };
+        expect(service.toMusicXml(score)).withContext(clef).toContain(xml);
+      }
+    });
+
+    it('writes the key as fifths and mode', () => {
+      expect(service.toMusicXml({ ...createEmptyScore(), keySignature: 'D' })).toContain(
+        '<key><fifths>2</fifths><mode>major</mode></key>',
+      );
+      expect(service.toMusicXml({ ...createEmptyScore(), keySignature: 'Cm' })).toContain(
+        '<key><fifths>-3</fifths><mode>minor</mode></key>',
+      );
+    });
+
+    it('writes the key-implied alteration without a written accidental', () => {
+      const score = { ...createEmptyScore(), keySignature: 'G' };
+      score.measures[0].elements.push(createNote('F', 4, 'quarter'));
+
+      const xml = service.toMusicXml(score);
+
+      expect(xml).toContain('<alter>1</alter>');
+      expect(xml).not.toContain('<accidental>');
     });
 
     it('encodes accidentals with both <alter> and <accidental>', () => {
@@ -34,6 +67,33 @@ describe('ExportService', () => {
 
       expect(xml).toContain('<alter>1</alter>');
       expect(xml).toContain('<accidental>sharp</accidental>');
+    });
+
+    it('writes 32nd and 64th note types with matching durations', () => {
+      const score = createEmptyScore();
+      score.measures[0].elements.push(createNote('C', 4, 'thirtysecond'), createNote('D', 4, 'sixtyfourth'));
+
+      const xml = service.toMusicXml(score);
+
+      expect(xml).toContain('<duration>4</duration>\n        <type>32nd</type>');
+      expect(xml).toContain('<duration>2</duration>\n        <type>64th</type>');
+    });
+
+    it('writes <dot/> after <type> and lengthens the duration for dotted elements', () => {
+      const score = createEmptyScore();
+      score.measures[0].elements.push(createNote('C', 4, 'quarter', null, true), createRest('eighth', true));
+
+      const xml = service.toMusicXml(score);
+
+      expect(xml).toContain('<duration>48</duration>\n        <type>quarter</type>\n        <dot/>');
+      expect(xml).toContain('<rest/>\n        <duration>24</duration>\n        <type>eighth</type>\n        <dot/>');
+    });
+
+    it('keeps a dotted 64th on a whole number of divisions', () => {
+      const score = createEmptyScore();
+      score.measures[0].elements.push(createNote('C', 4, 'sixtyfourth', null, true));
+
+      expect(service.toMusicXml(score)).toContain('<duration>3</duration>');
     });
 
     it('renders rests without a <pitch>', () => {
@@ -56,6 +116,18 @@ describe('ExportService', () => {
   });
 
   describe('toMidi', () => {
+    it('encodes dotted and very short notes without throwing', () => {
+      const plain = createEmptyScore();
+      plain.measures[0].elements.push(createNote('C', 4, 'quarter'));
+      const dotted = createEmptyScore();
+      dotted.measures[0].elements.push(createNote('C', 4, 'quarter', null, true));
+      const tiny = createEmptyScore();
+      tiny.measures[0].elements.push(createNote('C', 4, 'thirtysecond'), createNote('D', 4, 'sixtyfourth'));
+
+      expect(Array.from(service.toMidi(dotted))).not.toEqual(Array.from(service.toMidi(plain)));
+      expect(service.toMidi(tiny).length).toBeGreaterThan(0);
+    });
+
     it('produces a non-empty binary MIDI file with the correct header', () => {
       const score = createEmptyScore();
       score.measures[0].elements.push(createNote('C', 4, 'quarter'));

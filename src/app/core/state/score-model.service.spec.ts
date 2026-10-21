@@ -45,11 +45,98 @@ describe('ScoreModelService', () => {
       expect(measures[1].elements.length).toBe(1);
     });
 
+    it('counts the dot when deciding whether an element still fits', () => {
+      service.replaceScore(createEmptyScore());
+      service.appendElement(createNote('C', 4, 'half', null, true));
+
+      service.appendElement(createNote('D', 4, 'quarter'));
+      service.appendElement(createNote('E', 4, 'half'));
+
+      const lengths = service.score().measures.map((m) => m.elements.length);
+      expect(lengths).toEqual([2, 1]);
+    });
+
     it('appends rests too', () => {
       service.replaceScore(createEmptyScore());
       service.appendElement(createRest('quarter'));
 
       expect(service.score().measures[0].elements[0].kind).toBe('rest');
+    });
+  });
+
+  describe('setClef', () => {
+    it('changes the clef and keeps the notes untouched', () => {
+      service.replaceScore(createEmptyScore());
+      service.appendElement(createNote('C', 4, 'quarter'));
+
+      service.setClef('bass');
+
+      expect(service.score().clef).toBe('bass');
+      const note = service.score().measures[0].elements[0];
+      expect(note.kind === 'note' && note.pitch).toEqual({ step: 'C', octave: 4, accidental: null });
+    });
+
+    it('is undoable', () => {
+      service.replaceScore(createEmptyScore());
+
+      service.setClef('alto');
+      service.undo();
+
+      expect(service.score().clef).toBe('treble');
+    });
+
+    it('does not create an undo step when the clef is unchanged', () => {
+      service.replaceScore(createEmptyScore());
+
+      service.setClef('treble');
+
+      expect(service.canUndo()).toBe(false);
+    });
+  });
+
+  describe('setTimeSignature', () => {
+    const fourQuarters = () => {
+      service.replaceScore(createEmptyScore());
+      for (const step of ['C', 'D', 'E', 'F'] as const) {
+        service.appendElement(createNote(step, 4, 'quarter'));
+      }
+    };
+
+    it('applies a valid time signature and reflows the measures', () => {
+      fourQuarters();
+
+      expect(service.setTimeSignature({ numerator: 3, denominator: 4 })).toBeTrue();
+
+      expect(service.score().timeSignature).toEqual({ numerator: 3, denominator: 4 });
+      expect(service.score().measures.map((m) => m.elements.length)).toEqual([3, 1]);
+    });
+
+    it('rejects an invalid time signature without touching the score', () => {
+      fourQuarters();
+      const before = service.score();
+
+      expect(service.setTimeSignature({ numerator: 0, denominator: 4 })).toBeFalse();
+      expect(service.setTimeSignature({ numerator: 4, denominator: 5 })).toBeFalse();
+
+      expect(service.score()).toBe(before);
+    });
+
+    it('is undone in one step', () => {
+      fourQuarters();
+
+      service.setTimeSignature({ numerator: 3, denominator: 4 });
+      service.undo();
+
+      expect(service.score().timeSignature).toEqual({ numerator: 4, denominator: 4 });
+      expect(service.score().measures.length).toBe(1);
+    });
+
+    it('does not add an undo step when nothing changes', () => {
+      service.replaceScore(createEmptyScore());
+
+      expect(service.setTimeSignature({ numerator: 4, denominator: 4 })).toBeTrue();
+
+      expect(service.canUndo()).toBeFalse();
     });
   });
 
@@ -153,6 +240,90 @@ describe('ScoreModelService', () => {
       service.deleteElement('does-not-exist');
 
       expect(service.score().measures[0].elements.length).toBe(1);
+    });
+  });
+
+  describe('deleteElements', () => {
+    const fill = () => {
+      service.replaceScore(createEmptyScore());
+      for (const step of ['C', 'D', 'E', 'F', 'G'] as const) {
+        service.appendElement(createNote(step, 4, 'quarter'));
+      }
+      const [first, second] = service.score().measures;
+      return [...first.elements, ...second.elements].map((el) => el.id);
+    };
+
+    it('removes several elements at once, across measures', () => {
+      const ids = fill();
+
+      service.deleteElements([ids[1], ids[2], ids[4]]);
+
+      const steps = service.score().measures.flatMap((m) => m.elements.map((el) => el.kind === 'note' && el.pitch.step));
+      expect(steps).toEqual(['C', 'F']);
+    });
+
+    it('is a single undo step', () => {
+      const ids = fill();
+
+      service.deleteElements([ids[0], ids[1], ids[2]]);
+      service.undo();
+
+      expect(service.score().measures.flatMap((m) => m.elements).length).toBe(5);
+    });
+
+    it('drops trailing empty measures but keeps the first one', () => {
+      const ids = fill();
+
+      service.deleteElements([ids[4]]);
+      expect(service.score().measures.length).toBe(1);
+
+      service.deleteElements(ids.slice(0, 4));
+      expect(service.score().measures.length).toBe(1);
+      expect(service.score().measures[0].elements.length).toBe(0);
+    });
+
+    it('leaves an empty middle measure in place', () => {
+      const ids = fill();
+      service.appendElement(createNote('A', 4, 'whole'));
+      const secondMeasure = service.score().measures[1].elements.map((el) => el.id);
+
+      service.deleteElements(secondMeasure);
+
+      expect(service.score().measures.length).toBe(3);
+      expect(service.score().measures[1].elements.length).toBe(0);
+      expect(ids.length).toBe(5);
+    });
+
+    it('ignores unknown ids without adding an undo step', () => {
+      fill();
+      service.replaceScore(service.score());
+
+      service.deleteElements(['nope']);
+
+      expect(service.canUndo()).toBeFalse();
+    });
+  });
+
+  describe('insertElements', () => {
+    it('inserts several elements as one undo step', () => {
+      service.replaceScore(createEmptyScore());
+      service.appendElement(createNote('C', 4, 'quarter'));
+      service.appendElement(createNote('G', 4, 'quarter'));
+
+      service.insertElements(0, 1, [createNote('D', 4, 'quarter'), createNote('E', 4, 'quarter')]);
+      const steps = () => service.score().measures.flatMap((m) => m.elements.map((el) => el.kind === 'note' && el.pitch.step));
+      expect(steps()).toEqual(['C', 'D', 'E', 'G']);
+
+      service.undo();
+      expect(steps()).toEqual(['C', 'G']);
+    });
+
+    it('does nothing for an empty list', () => {
+      service.replaceScore(createEmptyScore());
+
+      service.insertElements(0, 0, []);
+
+      expect(service.canUndo()).toBeFalse();
     });
   });
 

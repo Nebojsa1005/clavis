@@ -37,6 +37,18 @@
       </button>
     </div>
 
+    <div class="toolbar__group" aria-label="Partitura">
+      <select class="toolbar__select" aria-label="Ključ" title="Ključ" (change)="onClefChange($event)">
+        @for (option of clefOptions; track option.value) {
+          <option [value]="option.value" [selected]="option.value === scoreModel.score().clef">
+            {{ option.label }}
+          </option>
+        }
+      </select>
+      <app-time-signature-control />
+      <app-key-signature-control />
+    </div>
+
     <div class="toolbar__group" aria-label="Izmene">
       <button type="button" [disabled]="!scoreModel.canUndo()" (click)="onUndo()" title="Undo (Ctrl+Z)">Undo</button>
       <button type="button" [disabled]="!scoreModel.canRedo()" (click)="onRedo()" title="Redo (Ctrl+Shift+Z)">
@@ -84,6 +96,16 @@
           {{ option.key }}
         </button>
       }
+      <button
+        type="button"
+        class="duration-btn"
+        [class.active]="noteInput.dotted()"
+        [attr.aria-pressed]="noteInput.dotted()"
+        title="Tačka (.)"
+        (click)="onToggleDotted()"
+      >
+        •
+      </button>
     </div>
 
     <div class="staff-area">

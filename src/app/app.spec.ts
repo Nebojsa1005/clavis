@@ -53,12 +53,49 @@ describe('App', () => {
       expect(caret.position().tick).toBe(64);
     });
 
+    it('selects 32nd and 64th durations with keys 6 and 7', () => {
+      noteInput.setActive(true);
+
+      press('6');
+      expect(noteInput.currentDuration()).toBe('thirtysecond');
+      press('7');
+      expect(noteInput.currentDuration()).toBe('sixtyfourth');
+    });
+
+    it('toggles the dot with the period key', () => {
+      noteInput.setActive(true);
+
+      press('.');
+      expect(noteInput.dotted()).toBeTrue();
+      press('.');
+      expect(noteInput.dotted()).toBeFalse();
+    });
+
     it('ignores arrow keys while note input mode is off', () => {
       noteInput.setActive(false);
 
       press('ArrowRight');
 
       expect(caret.position()).toEqual(CARET_START);
+    });
+  });
+
+  describe('clef selector', () => {
+    it('shows the current clef and changes it from the dropdown', () => {
+      const scoreModel = TestBed.inject(ScoreModelService);
+      scoreModel.replaceScore(createEmptyScore());
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+
+      const select = fixture.nativeElement.querySelector('select[aria-label="Ključ"]') as HTMLSelectElement;
+      expect(select.value).toBe('treble');
+
+      select.value = 'bass';
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      expect(scoreModel.score().clef).toBe('bass');
+      expect(select.value).toBe('bass');
     });
   });
 });

@@ -1,10 +1,22 @@
-export type Clef = 'treble' | 'bass';
+/** G clef (treble), F clef (bass) and the two common C clefs (alto = line 3, tenor = line 4). */
+import { isKeySignature } from './key-signature.util';
+
+export type Clef = 'treble' | 'bass' | 'alto' | 'tenor';
+
+export const CLEFS: readonly Clef[] = ['treble', 'bass', 'alto', 'tenor'];
 
 export type Step = 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B';
 
 export type AccidentalValue = 'sharp' | 'flat' | 'natural' | null;
 
-export type NoteDuration = 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth';
+export type NoteDuration =
+  | 'whole'
+  | 'half'
+  | 'quarter'
+  | 'eighth'
+  | 'sixteenth'
+  | 'thirtysecond'
+  | 'sixtyfourth';
 
 export interface NotePitch {
   step: Step;
@@ -17,6 +29,8 @@ export interface Note {
   kind: 'note';
   pitch: NotePitch;
   duration: NoteDuration;
+  /** Single augmentation dot: lengthens the note by half. */
+  dotted?: boolean;
   tieToNext?: boolean;
 }
 
@@ -24,6 +38,7 @@ export interface Rest {
   readonly id: string;
   kind: 'rest';
   duration: NoteDuration;
+  dotted?: boolean;
 }
 
 export type MeasureElement = Note | Rest;
@@ -54,12 +69,26 @@ export function createNote(
   octave: number,
   duration: NoteDuration,
   accidental: AccidentalValue = null,
+  dotted = false,
 ): Note {
-  return { id: createId(), kind: 'note', pitch: { step, octave, accidental }, duration };
+  return {
+    id: createId(),
+    kind: 'note',
+    pitch: { step, octave, accidental },
+    duration,
+    ...(dotted ? { dotted: true } : {}),
+  };
 }
 
-export function createRest(duration: NoteDuration): Rest {
-  return { id: createId(), kind: 'rest', duration };
+export function createRest(duration: NoteDuration, dotted = false): Rest {
+  return { id: createId(), kind: 'rest', duration, ...(dotted ? { dotted: true } : {}) };
+}
+
+/** Deep copy of a note or rest with a fresh id (used when pasting). */
+export function cloneElement(element: MeasureElement): MeasureElement {
+  return element.kind === 'note'
+    ? { ...element, id: createId(), pitch: { ...element.pitch } }
+    : { ...element, id: createId() };
 }
 
 export function createMeasure(elements: MeasureElement[]): Measure {
@@ -82,14 +111,14 @@ export function isScore(value: unknown): value is Score {
   }
   const candidate = value as Record<string, unknown>;
 
-  if (candidate['clef'] !== 'treble' && candidate['clef'] !== 'bass') {
+  if (!CLEFS.includes(candidate['clef'] as Clef)) {
     return false;
   }
   const timeSignature = candidate['timeSignature'] as Record<string, unknown> | undefined;
   if (!timeSignature || typeof timeSignature['numerator'] !== 'number' || typeof timeSignature['denominator'] !== 'number') {
     return false;
   }
-  if (typeof candidate['keySignature'] !== 'string') {
+  if (!isKeySignature(candidate['keySignature'])) {
     return false;
   }
   return Array.isArray(candidate['measures']);

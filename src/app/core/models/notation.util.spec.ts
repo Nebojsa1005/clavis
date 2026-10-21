@@ -24,6 +24,21 @@ describe('durationToBeats', () => {
     expect(durationToBeats('whole', fourFour)).toBe(4);
     expect(durationToBeats('eighth', fourFour)).toBe(0.5);
   });
+
+  it('computes beats for 32nd and 64th notes', () => {
+    expect(durationToBeats('thirtysecond', fourFour)).toBe(0.125);
+    expect(durationToBeats('sixtyfourth', fourFour)).toBe(0.0625);
+  });
+
+  it('adds half the length for dotted durations', () => {
+    expect(durationToBeats('quarter', fourFour, true)).toBe(1.5);
+    expect(durationToBeats('half', fourFour, true)).toBe(3);
+  });
+
+  it('measures beats in the denominator note value', () => {
+    expect(durationToBeats('eighth', { numerator: 6, denominator: 8 })).toBe(1);
+    expect(durationToBeats('quarter', { numerator: 6, denominator: 8 }, true)).toBe(3);
+  });
 });
 
 describe('pitchFromClickY', () => {
@@ -40,6 +55,20 @@ describe('pitchFromClickY', () => {
     expect(pitchFromClickY('treble', 120, topLineY, halfStepPx)).toEqual({ step: 'E', octave: 4 });
   });
 
+  it('maps the top line to A3 for bass clef', () => {
+    expect(pitchFromClickY('bass', 80, topLineY, halfStepPx)).toEqual({ step: 'A', octave: 3 });
+  });
+
+  it('puts middle C on the middle line for alto clef', () => {
+    // middle line is 4 half steps below the top line
+    expect(pitchFromClickY('alto', 100, topLineY, halfStepPx)).toEqual({ step: 'C', octave: 4 });
+  });
+
+  it('puts middle C on the fourth line for tenor clef', () => {
+    // the fourth line from the bottom is the second from the top, one line (10px) below it
+    expect(pitchFromClickY('tenor', 90, topLineY, halfStepPx)).toEqual({ step: 'C', octave: 4 });
+  });
+
   it('snaps to the nearest diatonic step', () => {
     // 81 je 0.2 koraka ispod vrha -> zaokružuje na 0 (F5)
     expect(pitchFromClickY('treble', 81, topLineY, halfStepPx)).toEqual({ step: 'F', octave: 5 });
@@ -53,6 +82,22 @@ describe('toToneNoteName', () => {
     expect(toToneNoteName({ step: 'C', octave: 4, accidental: null })).toBe('C4');
     expect(toToneNoteName({ step: 'C', octave: 4, accidental: 'sharp' })).toBe('C#4');
     expect(toToneNoteName({ step: 'C', octave: 4, accidental: 'flat' })).toBe('Cb4');
+  });
+});
+
+describe('toToneNoteName with a key signature', () => {
+  it('applies the key signature to notes without an accidental', () => {
+    expect(toToneNoteName({ step: 'F', octave: 4, accidental: null }, 'G')).toBe('F#4');
+    expect(toToneNoteName({ step: 'B', octave: 3, accidental: null }, 'F')).toBe('Bb3');
+  });
+
+  it('leaves notes outside the key alone', () => {
+    expect(toToneNoteName({ step: 'C', octave: 4, accidental: null }, 'G')).toBe('C4');
+  });
+
+  it('lets explicit accidentals override the key', () => {
+    expect(toToneNoteName({ step: 'F', octave: 4, accidental: 'natural' }, 'G')).toBe('F4');
+    expect(toToneNoteName({ step: 'F', octave: 4, accidental: 'flat' }, 'G')).toBe('Fb4');
   });
 });
 
@@ -92,5 +137,28 @@ describe('buildPlaybackSchedule', () => {
     const schedule = buildPlaybackSchedule(createEmptyScore(), 120);
     expect(schedule.notes).toEqual([]);
     expect(schedule.totalSeconds).toBe(0);
+  });
+});
+
+describe('buildPlaybackSchedule with a key signature', () => {
+  it('plays the sharpened pitch in G major', () => {
+    const score = { ...createEmptyScore(), keySignature: 'G' };
+    score.measures[0].elements.push(createNote('F', 4, 'quarter'), createNote('C', 4, 'quarter'));
+
+    const names = buildPlaybackSchedule(score, 120).notes.map((n) => n.noteName);
+
+    expect(names).toEqual(['F#4', 'C4']);
+  });
+});
+
+describe('buildPlaybackSchedule with dotted notes', () => {
+  it('plays a dotted quarter for 0.75s at 120 BPM and shifts the next note', () => {
+    const score = createEmptyScore();
+    score.measures[0].elements.push(createNote('C', 4, 'quarter', null, true), createNote('D', 4, 'eighth'));
+
+    const [first, second] = buildPlaybackSchedule(score, 120).notes;
+
+    expect(first.durationSeconds).toBeCloseTo(0.75);
+    expect(second.offsetSeconds).toBeCloseTo(0.75);
   });
 });

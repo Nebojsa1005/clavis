@@ -1,0 +1,33 @@
+<select class="time-select" aria-label="Takt" title="Takt" (change)="onSelect($event)">
+  @for (option of presets; track option.value) {
+    <option [value]="option.value" [selected]="selectedValue() === option.value">{{ option.value }}</option>
+  }
+  <option [value]="customValue" [selected]="selectedValue() === customValue">Drugi…</option>
+</select>
+
+@if (editingCustom()) {
+  <span class="custom">
+    <input
+      #numerator
+      type="number"
+      class="custom__numerator"
+      aria-label="Brojilac"
+      min="1"
+      max="32"
+      [value]="currentNumerator()"
+      (keydown.enter)="onApplyCustom(numerator, denominator)"
+    />
+    <span aria-hidden="true">/</span>
+    <select #denominator class="custom__denominator" aria-label="Imenilac">
+      @for (value of denominators; track value) {
+        <option [value]="value" [selected]="value === currentDenominator()">{{ value }}</option>
+      }
+    </select>
+    <button type="button" (click)="onApplyCustom(numerator, denominator)">Primeni</button>
+    <button type="button" (click)="onCancelCustom()">Otkaži</button>
+  </span>
+}
+
+@if (error()) {
+  <span class="error" role="alert">{{ error() }}</span>
+}

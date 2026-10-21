@@ -1,4 +1,4 @@
-import { Measure, NoteDuration, Score, TimeSignature } from './score.model';
+import { Measure, MeasureElement, NoteDuration, Score, TimeSignature } from './score.model';
 
 /** Position resolution inside a measure: 256 ticks per whole note (enough for a dotted 64th). */
 export const TICKS_PER_WHOLE = 256;
@@ -9,6 +9,8 @@ const DURATION_TICKS: Record<NoteDuration, number> = {
   quarter: TICKS_PER_WHOLE / 4,
   eighth: TICKS_PER_WHOLE / 8,
   sixteenth: TICKS_PER_WHOLE / 16,
+  thirtysecond: TICKS_PER_WHOLE / 32,
+  sixtyfourth: TICKS_PER_WHOLE / 64,
 };
 
 /** Caret position: measure, voice and tick inside the measure (0 = start of the measure). */
@@ -20,8 +22,13 @@ export interface CaretPosition {
 
 export const CARET_START: CaretPosition = { measureIndex: 0, voice: 0, tick: 0 };
 
-export function durationToTicks(duration: NoteDuration): number {
-  return DURATION_TICKS[duration];
+export function durationToTicks(duration: NoteDuration, dotted = false): number {
+  const ticks = DURATION_TICKS[duration];
+  return dotted ? ticks * 1.5 : ticks;
+}
+
+export function elementTicks(element: MeasureElement): number {
+  return durationToTicks(element.duration, element.dotted);
 }
 
 export function measureCapacityTicks(timeSignature: TimeSignature): number {
@@ -33,7 +40,7 @@ export function elementBoundaries(measure: Measure): number[] {
   const boundaries = [0];
   let elapsed = 0;
   for (const element of measure.elements) {
-    elapsed += durationToTicks(element.duration);
+    elapsed += elementTicks(element);
     boundaries.push(elapsed);
   }
   return boundaries;
@@ -124,6 +131,18 @@ export function positionAfterElement(score: Score, elementId: string): CaretPosi
     const index = elements.findIndex((element) => element.id === elementId);
     if (index !== -1) {
       const tick = elementBoundaries(score.measures[measureIndex])[index + 1];
+      return normalizeCaret(score, { measureIndex, voice: 0, tick });
+    }
+  }
+  return null;
+}
+
+/** Caret position right before the element with the given id, or null if it is not in the score. */
+export function positionBeforeElement(score: Score, elementId: string): CaretPosition | null {
+  for (let measureIndex = 0; measureIndex < score.measures.length; measureIndex++) {
+    const index = score.measures[measureIndex].elements.findIndex((element) => element.id === elementId);
+    if (index !== -1) {
+      const tick = elementBoundaries(score.measures[measureIndex])[index];
       return normalizeCaret(score, { measureIndex, voice: 0, tick });
     }
   }

@@ -39,7 +39,8 @@
   color: var(--color-fg-muted);
 }
 
-.bpm-input {
+.bpm-input,
+.toolbar__select {
   width: 52px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -47,6 +48,11 @@
   font-size: 0.85rem;
   color: var(--color-fg);
   background: var(--color-surface);
+}
+
+.toolbar__select {
+  width: auto;
+  cursor: pointer;
 }
 
 .toolbar button {

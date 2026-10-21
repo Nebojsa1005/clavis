@@ -1,6 +1,11 @@
+.staff-wrap {
+  position: relative;
+}
+
 .staff-canvas {
   width: 100%;
   min-height: 240px;
+  user-select: none;
 
   svg {
     display: block;
@@ -9,4 +14,13 @@
   &.input-active {
     cursor: crosshair;
   }
+}
+
+.selection-box {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border: 1px solid var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  pointer-events: none;
 }

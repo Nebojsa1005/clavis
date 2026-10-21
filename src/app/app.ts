@@ -192,6 +192,17 @@ export class App {
       return;
     }
 
+    if (event.ctrlKey && event.key.toLowerCase() === 'a' && !this.noteInput.active()) {
+      this.selection.selectAll();
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key === 'Escape' && !this.noteInput.active()) {
+      this.selection.clear();
+      return;
+    }
+
     if (event.key === 'Delete' || event.key === 'Backspace') {
       const id = this.selection.selectedId();
       if (id) {

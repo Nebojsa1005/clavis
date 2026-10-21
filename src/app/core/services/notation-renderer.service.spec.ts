@@ -50,6 +50,20 @@ describe('NotationRendererService', () => {
     }
   });
 
+  it('highlights every element in a multi-selection and nothing else', () => {
+    const score = createEmptyScore();
+    const [a, b, c] = ['C', 'D', 'E'].map((step) => createNote(step as 'C', 4, 'quarter'));
+    score.measures[0].elements.push(a, b, c);
+
+    service.render(container, score, new Set([a.id, c.id]));
+
+    const fillOf = (id: string) =>
+      (container.querySelector(`[${SCORE_ELEMENT_ID_ATTR}="${id}"]`) as SVGElement).getAttribute('fill');
+    expect(fillOf(a.id)).toBe('#3b5bfd');
+    expect(fillOf(c.id)).toBe('#3b5bfd');
+    expect(fillOf(b.id)).not.toBe('#3b5bfd');
+  });
+
   it('draws an extra element (the augmentation dot) for each dotted note and rest', () => {
     // VexFlow gives the dot no class of its own, so compare what is drawn inside the note groups.
     const drawnPerNote = (dotted: boolean) => {
@@ -103,7 +117,7 @@ describe('NotationRendererService', () => {
     const note = createNote('C', 4, 'quarter');
     score.measures[0].elements.push(note);
 
-    service.render(container, score, note.id);
+    service.render(container, score, new Set([note.id]));
 
     const tagged = container.querySelector(`[${SCORE_ELEMENT_ID_ATTR}="${note.id}"]`) as SVGElement;
     expect(tagged.getAttribute('fill')).toBe('#3b5bfd');
@@ -125,7 +139,7 @@ describe('NotationRendererService', () => {
     });
 
     it('draws exactly one caret line when a position is passed', () => {
-      service.render(container, scoreWithQuarters(2), null, { measureIndex: 0, voice: 0, tick: 64 });
+      service.render(container, scoreWithQuarters(2), new Set(), { measureIndex: 0, voice: 0, tick: 64 });
 
       expect(container.querySelectorAll(`.${CARET_CLASS}`).length).toBe(1);
     });
@@ -156,7 +170,7 @@ describe('NotationRendererService', () => {
     });
 
     it('supports a caret in an empty measure', () => {
-      service.render(container, createEmptyScore(), null, { measureIndex: 0, voice: 0, tick: 0 });
+      service.render(container, createEmptyScore(), new Set(), { measureIndex: 0, voice: 0, tick: 0 });
 
       expect(container.querySelectorAll(`.${CARET_CLASS}`).length).toBe(1);
     });

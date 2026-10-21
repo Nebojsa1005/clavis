@@ -105,7 +105,7 @@ export class NotationRendererService {
   render(
     container: HTMLDivElement,
     score: Score,
-    selectedId: string | null = null,
+    selectedIds: ReadonlySet<string> = new Set(),
     caret: CaretPosition | null = null,
   ): void {
     container.replaceChildren();
@@ -120,7 +120,7 @@ export class NotationRendererService {
 
     let x = STAVE_MARGIN_X;
     score.measures.forEach((measure, index) => {
-      this.renderMeasure(context, measure, score, x, index === 0, selectedId);
+      this.renderMeasure(context, measure, score, x, index === 0, selectedIds);
       x += STAVE_WIDTH;
     });
 
@@ -155,7 +155,7 @@ export class NotationRendererService {
     score: Score,
     x: number,
     isFirst: boolean,
-    selectedId: string | null,
+    selectedIds: ReadonlySet<string>,
   ): void {
     const stave = new Stave(x, STAVE_Y, STAVE_WIDTH);
     if (isFirst) {
@@ -170,7 +170,7 @@ export class NotationRendererService {
     const idByNote = new Map<StaveNote, string>();
     const tickables = measure.elements.map((el) => {
       const note = this.toStaveNote(el, score.clef);
-      if (el.id === selectedId) {
+      if (selectedIds.has(el.id)) {
         note.setStyle({ fillStyle: SELECTED_NOTE_COLOR, strokeStyle: SELECTED_NOTE_COLOR });
       }
       idByNote.set(note, el.id);

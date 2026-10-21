@@ -10,6 +10,7 @@ import { ScoreSessionService } from './core/state/score-session.service';
 import { ScoreModelService } from './core/state/score-model.service';
 import { SelectionService } from './core/state/selection.service';
 import { KeySignatureControl } from './features/key-signature-control/key-signature-control';
+import { LibraryDialog, LibraryDialogMode } from './features/library-dialog/library-dialog';
 import { StaffView } from './features/staff-view/staff-view';
 import { TimeSignatureControl } from './features/time-signature-control/time-signature-control';
 
@@ -36,13 +37,14 @@ const KEY_DURATION_MAP: Record<string, NoteDuration> = {
 
 @Component({
   selector: 'app-root',
-  imports: [KeySignatureControl, StaffView, TimeSignatureControl],
+  imports: [KeySignatureControl, LibraryDialog, StaffView, TimeSignatureControl],
   templateUrl: './app.html',
   styleUrl: './app.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class App {
   protected readonly appName = signal('Clavis');
+  protected readonly dialogMode = signal<LibraryDialogMode | null>(null);
   protected readonly noteInput = inject(NoteInputService);
   protected readonly scoreModel = inject(ScoreModelService);
   protected readonly selection = inject(SelectionService);
@@ -138,8 +140,21 @@ export class App {
     this.selection.clear();
   }
 
+  /** Saves into the open score; a score that was never saved first asks for a name. */
   protected onSave(): void {
+    if (this.session.currentId() === null) {
+      this.dialogMode.set('saveAs');
+      return;
+    }
     this.session.save().catch((error: unknown) => window.alert(`Čuvanje nije uspelo: ${String(error)}`));
+  }
+
+  protected onSaveAs(): void {
+    this.dialogMode.set('saveAs');
+  }
+
+  protected onOpen(): void {
+    this.dialogMode.set('open');
   }
 
   protected onExportJson(): void {
@@ -183,6 +198,16 @@ export class App {
 
   @HostListener('document:keydown', ['$event'])
   protected onKeydown(event: KeyboardEvent): void {
+    if (this.dialogMode() !== null) {
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+      this.onSave();
+      event.preventDefault();
+      return;
+    }
+
     // Typing in the tempo field or using a dropdown must not trigger editor shortcuts.
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) {

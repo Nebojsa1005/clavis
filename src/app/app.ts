@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, HostListener, inject, signal } from '@angular/core';
-import { createEmptyScore, NoteDuration } from './core/models/score.model';
+import { Clef, CLEFS, createEmptyScore, NoteDuration } from './core/models/score.model';
 import { ExportService } from './core/services/export.service';
 import { PersistenceService } from './core/services/persistence.service';
 import { PlaybackService } from './core/services/playback.service';
@@ -12,6 +12,11 @@ import { StaffView } from './features/staff-view/staff-view';
 interface DurationOption {
   value: NoteDuration;
   key: string;
+  label: string;
+}
+
+interface ClefOption {
+  value: Clef;
   label: string;
 }
 
@@ -48,6 +53,13 @@ export class App {
     { value: 'sixteenth', key: '5', label: 'Šesnaestinka' },
   ];
 
+  protected readonly clefOptions: ClefOption[] = [
+    { value: 'treble', label: 'Violinski (G)' },
+    { value: 'bass', label: 'Bas (F)' },
+    { value: 'alto', label: 'Alt (C)' },
+    { value: 'tenor', label: 'Tenor (C)' },
+  ];
+
   constructor() {
     this.persistence
       .loadScore()
@@ -65,6 +77,15 @@ export class App {
 
   protected onSelectDuration(duration: NoteDuration): void {
     this.noteInput.setDuration(duration);
+  }
+
+  protected onClefChange(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    if (CLEFS.includes(select.value as Clef)) {
+      this.scoreModel.setClef(select.value as Clef);
+    }
+    // Hand focus back so arrow keys keep driving the caret instead of the dropdown.
+    select.blur();
   }
 
   protected onUndo(): void {

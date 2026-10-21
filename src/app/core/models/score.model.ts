@@ -1,4 +1,7 @@
-export type Clef = 'treble' | 'bass';
+/** G clef (treble), F clef (bass) and the two common C clefs (alto = line 3, tenor = line 4). */
+export type Clef = 'treble' | 'bass' | 'alto' | 'tenor';
+
+export const CLEFS: readonly Clef[] = ['treble', 'bass', 'alto', 'tenor'];
 
 export type Step = 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B';
 
@@ -82,7 +85,7 @@ export function isScore(value: unknown): value is Score {
   }
   const candidate = value as Record<string, unknown>;
 
-  if (candidate['clef'] !== 'treble' && candidate['clef'] !== 'bass') {
+  if (!CLEFS.includes(candidate['clef'] as Clef)) {
     return false;
   }
   const timeSignature = candidate['timeSignature'] as Record<string, unknown> | undefined;

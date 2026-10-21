@@ -26,6 +26,20 @@ describe('ExportService', () => {
       expect(xml).toContain('<type>quarter</type>');
     });
 
+    it('writes the clef sign and line for every clef', () => {
+      const expected = {
+        treble: '<clef><sign>G</sign><line>2</line></clef>',
+        bass: '<clef><sign>F</sign><line>4</line></clef>',
+        alto: '<clef><sign>C</sign><line>3</line></clef>',
+        tenor: '<clef><sign>C</sign><line>4</line></clef>',
+      } as const;
+
+      for (const [clef, xml] of Object.entries(expected)) {
+        const score = { ...createEmptyScore(), clef: clef as keyof typeof expected };
+        expect(service.toMusicXml(score)).withContext(clef).toContain(xml);
+      }
+    });
+
     it('encodes accidentals with both <alter> and <accidental>', () => {
       const score = createEmptyScore();
       score.measures[0].elements.push(createNote('F', 4, 'quarter', 'sharp'));

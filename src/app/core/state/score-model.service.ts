@@ -1,7 +1,7 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { insertWithReflow } from '../models/insert.util';
 import { durationToBeats, stepDiatonic } from '../models/notation.util';
-import { createMeasure, createTestScore, MeasureElement, Score } from '../models/score.model';
+import { Clef, createMeasure, createTestScore, MeasureElement, Score } from '../models/score.model';
 
 const MAX_HISTORY = 20;
 
@@ -42,6 +42,14 @@ export class ScoreModelService {
 
       return { ...score, measures };
     });
+  }
+
+  /** Changes the clef. Notes keep their pitch; only how they are drawn and entered changes. */
+  setClef(clef: Clef): void {
+    if (clef === this.scoreState().clef) {
+      return;
+    }
+    this.mutate((score) => ({ ...score, clef }));
   }
 
   /** Inserts an element before `index` in a measure; overflow spills into the following measures. */

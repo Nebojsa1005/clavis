@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { createEmptyScore, createMeasure, createNote } from '../models/score.model';
+import { CLEFS, createEmptyScore, createMeasure, createNote } from '../models/score.model';
 import { NotationRendererService, CARET_CLASS, SCORE_ELEMENT_ID_ATTR } from './notation-renderer.service';
 
 describe('NotationRendererService', () => {
@@ -25,6 +25,17 @@ describe('NotationRendererService', () => {
     const svg = container.querySelector('svg');
     expect(svg).withContext('VexFlow treba da ubaci <svg> u kontejner').not.toBeNull();
     expect(container.querySelectorAll('.vf-stavenote').length).toBeGreaterThan(0);
+  });
+
+  it('renders notes for every supported clef', () => {
+    for (const clef of CLEFS) {
+      const score = { ...createEmptyScore(clef) };
+      score.measures[0].elements.push(createNote('C', 4, 'quarter'));
+
+      service.render(container, score);
+
+      expect(container.querySelectorAll('.vf-stavenote').length).withContext(clef).toBe(1);
+    }
   });
 
   it('clears previous render before drawing again', () => {

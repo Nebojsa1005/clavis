@@ -53,6 +53,36 @@ describe('ScoreModelService', () => {
     });
   });
 
+  describe('setClef', () => {
+    it('changes the clef and keeps the notes untouched', () => {
+      service.replaceScore(createEmptyScore());
+      service.appendElement(createNote('C', 4, 'quarter'));
+
+      service.setClef('bass');
+
+      expect(service.score().clef).toBe('bass');
+      const note = service.score().measures[0].elements[0];
+      expect(note.kind === 'note' && note.pitch).toEqual({ step: 'C', octave: 4, accidental: null });
+    });
+
+    it('is undoable', () => {
+      service.replaceScore(createEmptyScore());
+
+      service.setClef('alto');
+      service.undo();
+
+      expect(service.score().clef).toBe('treble');
+    });
+
+    it('does not create an undo step when the clef is unchanged', () => {
+      service.replaceScore(createEmptyScore());
+
+      service.setClef('treble');
+
+      expect(service.canUndo()).toBe(false);
+    });
+  });
+
   describe('insertElement', () => {
     it('inserts in the middle of a measure and shifts the rest', () => {
       service.replaceScore(createEmptyScore());

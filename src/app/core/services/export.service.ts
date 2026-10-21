@@ -27,6 +27,8 @@ const MUSICXML_TYPE: Record<NoteDuration, string> = {
 const MUSICXML_CLEF: Record<Score['clef'], { sign: string; line: number }> = {
   treble: { sign: 'G', line: 2 },
   bass: { sign: 'F', line: 4 },
+  alto: { sign: 'C', line: 3 },
+  tenor: { sign: 'C', line: 4 },
 };
 
 const MUSICXML_FIFTHS_BY_KEY: Record<string, number> = {

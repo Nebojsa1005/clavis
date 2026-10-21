@@ -32,6 +32,8 @@ export function durationToBeats(duration: NoteDuration, timeSignature: TimeSigna
 const TOP_LINE_PITCH: Record<Clef, { step: Step; octave: number }> = {
   treble: { step: 'F', octave: 5 },
   bass: { step: 'A', octave: 3 },
+  alto: { step: 'G', octave: 4 },
+  tenor: { step: 'E', octave: 4 },
 };
 
 /**

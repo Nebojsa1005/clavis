@@ -1,4 +1,4 @@
-import { createEmptyScore, isScore } from './score.model';
+import { CLEFS, createEmptyScore, isScore } from './score.model';
 
 describe('isScore', () => {
   it('accepts a well-formed score', () => {
@@ -12,8 +12,14 @@ describe('isScore', () => {
     expect(isScore(42)).toBe(false);
   });
 
+  it('accepts every supported clef', () => {
+    for (const clef of CLEFS) {
+      expect(isScore({ ...createEmptyScore(), clef })).toBe(true);
+    }
+  });
+
   it('rejects an invalid clef', () => {
-    expect(isScore({ ...createEmptyScore(), clef: 'alto' })).toBe(false);
+    expect(isScore({ ...createEmptyScore(), clef: 'soprano' })).toBe(false);
   });
 
   it('rejects a missing/malformed timeSignature', () => {

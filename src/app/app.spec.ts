@@ -61,4 +61,23 @@ describe('App', () => {
       expect(caret.position()).toEqual(CARET_START);
     });
   });
+
+  describe('clef selector', () => {
+    it('shows the current clef and changes it from the dropdown', () => {
+      const scoreModel = TestBed.inject(ScoreModelService);
+      scoreModel.replaceScore(createEmptyScore());
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+
+      const select = fixture.nativeElement.querySelector('select[aria-label="Ključ"]') as HTMLSelectElement;
+      expect(select.value).toBe('treble');
+
+      select.value = 'bass';
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      expect(scoreModel.score().clef).toBe('bass');
+      expect(select.value).toBe('bass');
+    });
+  });
 });

@@ -40,6 +40,20 @@ describe('pitchFromClickY', () => {
     expect(pitchFromClickY('treble', 120, topLineY, halfStepPx)).toEqual({ step: 'E', octave: 4 });
   });
 
+  it('maps the top line to A3 for bass clef', () => {
+    expect(pitchFromClickY('bass', 80, topLineY, halfStepPx)).toEqual({ step: 'A', octave: 3 });
+  });
+
+  it('puts middle C on the middle line for alto clef', () => {
+    // middle line is 4 half steps below the top line
+    expect(pitchFromClickY('alto', 100, topLineY, halfStepPx)).toEqual({ step: 'C', octave: 4 });
+  });
+
+  it('puts middle C on the fourth line for tenor clef', () => {
+    // the fourth line from the bottom is the second from the top, one line (10px) below it
+    expect(pitchFromClickY('tenor', 90, topLineY, halfStepPx)).toEqual({ step: 'C', octave: 4 });
+  });
+
   it('snaps to the nearest diatonic step', () => {
     // 81 je 0.2 koraka ispod vrha -> zaokružuje na 0 (F5)
     expect(pitchFromClickY('treble', 81, topLineY, halfStepPx)).toEqual({ step: 'F', octave: 5 });

@@ -4,12 +4,14 @@ import { createEmptyScore, createNote } from './core/models/score.model';
 import { CaretService } from './core/state/caret.service';
 import { NoteInputService } from './core/state/note-input.service';
 import { ScoreModelService } from './core/state/score-model.service';
+import { LIBRARY_DB_NAME } from './core/services/score-library.service';
 import { App } from './app';
 
 describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
+      providers: [{ provide: LIBRARY_DB_NAME, useValue: `clavis-test-${crypto.randomUUID()}` }],
     }).compileComponents();
   });
 

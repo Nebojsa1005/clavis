@@ -1,11 +1,12 @@
 import { ChangeDetectionStrategy, Component, HostListener, computed, inject, signal } from '@angular/core';
-import { Clef, CLEFS, createEmptyScore, NoteDuration } from './core/models/score.model';
+import { Clef, CLEFS, NoteDuration } from './core/models/score.model';
 import { ExportService } from './core/services/export.service';
 import { PersistenceService } from './core/services/persistence.service';
 import { PlaybackService } from './core/services/playback.service';
 import { CaretService } from './core/state/caret.service';
 import { EditingService } from './core/state/editing.service';
 import { NoteInputService } from './core/state/note-input.service';
+import { ScoreSessionService } from './core/state/score-session.service';
 import { ScoreModelService } from './core/state/score-model.service';
 import { SelectionService } from './core/state/selection.service';
 import { KeySignatureControl } from './features/key-signature-control/key-signature-control';
@@ -50,6 +51,7 @@ export class App {
   protected readonly playback = inject(PlaybackService);
   private readonly exportService = inject(ExportService);
   private readonly persistence = inject(PersistenceService);
+  protected readonly session = inject(ScoreSessionService);
 
   protected readonly durationOptions: DurationOption[] = [
     { value: 'whole', key: '1', label: 'Cela' },
@@ -69,13 +71,8 @@ export class App {
   ];
 
   constructor() {
-    this.persistence
-      .loadScore()
-      .then((score) => {
-        if (score) {
-          this.scoreModel.replaceScore(score);
-        }
-      })
+    this.session
+      .restoreLast()
       .catch((error: unknown) => console.warn('Učitavanje sačuvane partiture nije uspelo:', error));
   }
 
@@ -134,15 +131,15 @@ export class App {
   }
 
   protected onNew(): void {
-    if (!window.confirm('Započeti novu, praznu partituru? Nesačuvane izmene biće izgubljene.')) {
+    if (this.session.dirty() && !window.confirm('Započeti novu, praznu partituru? Nesačuvane izmene biće izgubljene.')) {
       return;
     }
-    this.scoreModel.replaceScore(createEmptyScore());
+    this.session.newScore();
     this.selection.clear();
   }
 
   protected onSave(): void {
-    void this.persistence.saveScore(this.scoreModel.score());
+    this.session.save().catch((error: unknown) => window.alert(`Čuvanje nije uspelo: ${String(error)}`));
   }
 
   protected onExportJson(): void {
@@ -160,7 +157,7 @@ export class App {
     this.persistence
       .importJsonFile(file)
       .then((score) => {
-        this.scoreModel.replaceScore(score);
+        this.session.adoptUnsaved(score, file.name.replace(/\.json$/i, '') || undefined);
         this.selection.clear();
       })
       .catch((error: unknown) => {

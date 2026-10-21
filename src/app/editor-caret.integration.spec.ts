@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { App } from './app';
 import { CARET_CLASS, NotationRendererService } from './core/services/notation-renderer.service';
-import { PersistenceService } from './core/services/persistence.service';
+import { LIBRARY_DB_NAME } from './core/services/score-library.service';
 import { createEmptyScore, createMeasure, createNote, MeasureElement, Step } from './core/models/score.model';
 import { CaretService } from './core/state/caret.service';
 import { NoteInputService } from './core/state/note-input.service';
@@ -39,13 +39,15 @@ describe('Caret editing (integration)', () => {
     scoreModel.score().measures[measureIndex].elements.map((el) => (el.kind === 'note' ? el.pitch.step : 'r'));
 
   beforeEach(async () => {
-    await TestBed.configureTestingModule({ imports: [App] }).compileComponents();
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: LIBRARY_DB_NAME, useValue: `clavis-test-${crypto.randomUUID()}` }],
+    }).compileComponents();
 
     scoreModel = TestBed.inject(ScoreModelService);
     caret = TestBed.inject(CaretService);
     noteInput = TestBed.inject(NoteInputService);
     renderer = TestBed.inject(NotationRendererService);
-    spyOn(TestBed.inject(PersistenceService), 'loadScore').and.resolveTo(null);
 
     fixture = TestBed.createComponent(App);
     fixture.detectChanges();

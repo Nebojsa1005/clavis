@@ -40,6 +40,25 @@ describe('ExportService', () => {
       }
     });
 
+    it('writes the key as fifths and mode', () => {
+      expect(service.toMusicXml({ ...createEmptyScore(), keySignature: 'D' })).toContain(
+        '<key><fifths>2</fifths><mode>major</mode></key>',
+      );
+      expect(service.toMusicXml({ ...createEmptyScore(), keySignature: 'Cm' })).toContain(
+        '<key><fifths>-3</fifths><mode>minor</mode></key>',
+      );
+    });
+
+    it('writes the key-implied alteration without a written accidental', () => {
+      const score = { ...createEmptyScore(), keySignature: 'G' };
+      score.measures[0].elements.push(createNote('F', 4, 'quarter'));
+
+      const xml = service.toMusicXml(score);
+
+      expect(xml).toContain('<alter>1</alter>');
+      expect(xml).not.toContain('<accidental>');
+    });
+
     it('encodes accidentals with both <alter> and <accidental>', () => {
       const score = createEmptyScore();
       score.measures[0].elements.push(createNote('F', 4, 'quarter', 'sharp'));

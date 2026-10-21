@@ -2,6 +2,7 @@ import { Injectable, computed, signal } from '@angular/core';
 import { changeTimeSignature, insertWithReflow } from '../models/insert.util';
 import { durationToBeats, stepDiatonic } from '../models/notation.util';
 import { Clef, createMeasure, createTestScore, MeasureElement, Score, TimeSignature } from '../models/score.model';
+import { isKeySignature } from '../models/key-signature.util';
 import { validateTimeSignature } from '../models/time-signature.util';
 
 const MAX_HISTORY = 20;
@@ -51,6 +52,17 @@ export class ScoreModelService {
       return;
     }
     this.mutate((score) => ({ ...score, clef }));
+  }
+
+  /** Changes the key signature. Returns false (and changes nothing) for an unknown key. */
+  setKeySignature(keySignature: string): boolean {
+    if (!isKeySignature(keySignature)) {
+      return false;
+    }
+    if (keySignature !== this.scoreState().keySignature) {
+      this.mutate((score) => ({ ...score, keySignature }));
+    }
+    return true;
   }
 
   /**

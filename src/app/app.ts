@@ -7,6 +7,7 @@ import { CaretService } from './core/state/caret.service';
 import { NoteInputService } from './core/state/note-input.service';
 import { ScoreModelService } from './core/state/score-model.service';
 import { SelectionService } from './core/state/selection.service';
+import { KeySignatureControl } from './features/key-signature-control/key-signature-control';
 import { StaffView } from './features/staff-view/staff-view';
 import { TimeSignatureControl } from './features/time-signature-control/time-signature-control';
 
@@ -31,7 +32,7 @@ const KEY_DURATION_MAP: Record<string, NoteDuration> = {
 
 @Component({
   selector: 'app-root',
-  imports: [StaffView, TimeSignatureControl],
+  imports: [KeySignatureControl, StaffView, TimeSignatureControl],
   templateUrl: './app.html',
   styleUrl: './app.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

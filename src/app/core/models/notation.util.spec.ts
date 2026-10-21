@@ -70,6 +70,22 @@ describe('toToneNoteName', () => {
   });
 });
 
+describe('toToneNoteName with a key signature', () => {
+  it('applies the key signature to notes without an accidental', () => {
+    expect(toToneNoteName({ step: 'F', octave: 4, accidental: null }, 'G')).toBe('F#4');
+    expect(toToneNoteName({ step: 'B', octave: 3, accidental: null }, 'F')).toBe('Bb3');
+  });
+
+  it('leaves notes outside the key alone', () => {
+    expect(toToneNoteName({ step: 'C', octave: 4, accidental: null }, 'G')).toBe('C4');
+  });
+
+  it('lets explicit accidentals override the key', () => {
+    expect(toToneNoteName({ step: 'F', octave: 4, accidental: 'natural' }, 'G')).toBe('F4');
+    expect(toToneNoteName({ step: 'F', octave: 4, accidental: 'flat' }, 'G')).toBe('Fb4');
+  });
+});
+
 describe('buildPlaybackSchedule', () => {
   it('schedules notes sequentially at 120 BPM (0.5s per quarter)', () => {
     const score = createEmptyScore();
@@ -106,5 +122,16 @@ describe('buildPlaybackSchedule', () => {
     const schedule = buildPlaybackSchedule(createEmptyScore(), 120);
     expect(schedule.notes).toEqual([]);
     expect(schedule.totalSeconds).toBe(0);
+  });
+});
+
+describe('buildPlaybackSchedule with a key signature', () => {
+  it('plays the sharpened pitch in G major', () => {
+    const score = { ...createEmptyScore(), keySignature: 'G' };
+    score.measures[0].elements.push(createNote('F', 4, 'quarter'), createNote('C', 4, 'quarter'));
+
+    const names = buildPlaybackSchedule(score, 120).notes.map((n) => n.noteName);
+
+    expect(names).toEqual(['F#4', 'C4']);
   });
 });

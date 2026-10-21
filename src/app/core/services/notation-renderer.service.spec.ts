@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { KEY_SIGNATURE_OPTIONS } from '../models/key-signature.util';
 import { CLEFS, createEmptyScore, createMeasure, createNote } from '../models/score.model';
 import { NotationRendererService, CARET_CLASS, SCORE_ELEMENT_ID_ATTR } from './notation-renderer.service';
 
@@ -35,6 +36,17 @@ describe('NotationRendererService', () => {
       service.render(container, score);
 
       expect(container.querySelectorAll('.vf-stavenote').length).withContext(clef).toBe(1);
+    }
+  });
+
+  it('draws a key signature for every supported key', () => {
+    for (const option of KEY_SIGNATURE_OPTIONS) {
+      const score = { ...createEmptyScore(), keySignature: option.value };
+      score.measures[0].elements.push(createNote('C', 4, 'quarter'));
+
+      service.render(container, score);
+
+      expect(container.querySelectorAll('.vf-stavenote').length).withContext(option.value).toBe(1);
     }
   });
 

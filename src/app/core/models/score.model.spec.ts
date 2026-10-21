@@ -27,6 +27,15 @@ describe('isScore', () => {
     expect(isScore({ ...createEmptyScore(), timeSignature: undefined })).toBe(false);
   });
 
+  it('accepts major and minor key signatures', () => {
+    expect(isScore({ ...createEmptyScore(), keySignature: 'Bb' })).toBe(true);
+    expect(isScore({ ...createEmptyScore(), keySignature: 'F#m' })).toBe(true);
+  });
+
+  it('rejects an unknown keySignature', () => {
+    expect(isScore({ ...createEmptyScore(), keySignature: 'H' })).toBe(false);
+  });
+
   it('rejects a non-string keySignature', () => {
     expect(isScore({ ...createEmptyScore(), keySignature: 0 })).toBe(false);
   });

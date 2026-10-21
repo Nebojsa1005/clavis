@@ -1,4 +1,6 @@
 /** G clef (treble), F clef (bass) and the two common C clefs (alto = line 3, tenor = line 4). */
+import { isKeySignature } from './key-signature.util';
+
 export type Clef = 'treble' | 'bass' | 'alto' | 'tenor';
 
 export const CLEFS: readonly Clef[] = ['treble', 'bass', 'alto', 'tenor'];
@@ -92,7 +94,7 @@ export function isScore(value: unknown): value is Score {
   if (!timeSignature || typeof timeSignature['numerator'] !== 'number' || typeof timeSignature['denominator'] !== 'number') {
     return false;
   }
-  if (typeof candidate['keySignature'] !== 'string') {
+  if (!isKeySignature(candidate['keySignature'])) {
     return false;
   }
   return Array.isArray(candidate['measures']);

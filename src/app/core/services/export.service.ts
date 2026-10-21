@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import MidiWriter from 'midi-writer-js';
+import { effectiveAccidental, findKeySignature } from '../models/key-signature.util';
 import { toToneNoteName } from '../models/notation.util';
 import { AccidentalValue, Measure, MeasureElement, NoteDuration, Score } from '../models/score.model';
 import { triggerDownload } from '../utils/download.util';
@@ -31,24 +32,6 @@ const MUSICXML_CLEF: Record<Score['clef'], { sign: string; line: number }> = {
   tenor: { sign: 'C', line: 4 },
 };
 
-const MUSICXML_FIFTHS_BY_KEY: Record<string, number> = {
-  C: 0,
-  G: 1,
-  D: 2,
-  A: 3,
-  E: 4,
-  B: 5,
-  'F#': 6,
-  'C#': 7,
-  F: -1,
-  Bb: -2,
-  Eb: -3,
-  Ab: -4,
-  Db: -5,
-  Gb: -6,
-  Cb: -7,
-};
-
 const MUSICXML_ALTER: Record<Exclude<AccidentalValue, null>, number> = {
   sharp: 1,
   flat: -1,
@@ -74,9 +57,9 @@ export class ExportService {
 
   toMusicXml(score: Score): string {
     const clef = MUSICXML_CLEF[score.clef];
-    const fifths = MUSICXML_FIFTHS_BY_KEY[score.keySignature] ?? 0;
+    const key = findKeySignature(score.keySignature) ?? { fifths: 0, mode: 'major' as const };
     const measuresXml = score.measures
-      .map((measure, index) => this.measureToXml(measure, score, index, clef, fifths))
+      .map((measure, index) => this.measureToXml(measure, score, index, clef, key))
       .join('\n');
 
     return [
@@ -109,7 +92,7 @@ export class ExportService {
         }
         track.addEvent(
           new MidiWriter.NoteEvent({
-            pitch: [toToneNoteName(element.pitch)],
+            pitch: [toToneNoteName(element.pitch, score.keySignature)],
             duration: token,
             wait: pendingWait.length > 0 ? pendingWait : undefined,
           }),
@@ -172,14 +155,14 @@ export class ExportService {
     score: Score,
     index: number,
     clef: { sign: string; line: number },
-    fifths: number,
+    key: { fifths: number; mode: 'major' | 'minor' },
   ): string {
-    const notesXml = measure.elements.map((el) => this.elementToXml(el)).join('\n');
+    const notesXml = measure.elements.map((el) => this.elementToXml(el, score.keySignature)).join('\n');
     const attributes =
       index === 0
         ? `      <attributes>
         <divisions>${MUSICXML_DIVISIONS}</divisions>
-        <key><fifths>${fifths}</fifths></key>
+        <key><fifths>${key.fifths}</fifths><mode>${key.mode}</mode></key>
         <time><beats>${score.timeSignature.numerator}</beats><beat-type>${score.timeSignature.denominator}</beat-type></time>
         <clef><sign>${clef.sign}</sign><line>${clef.line}</line></clef>
       </attributes>\n`
@@ -188,7 +171,7 @@ export class ExportService {
     return `    <measure number="${index + 1}">\n${attributes}${notesXml}\n    </measure>`;
   }
 
-  private elementToXml(element: MeasureElement): string {
+  private elementToXml(element: MeasureElement, keySignature: string): string {
     const duration = MUSICXML_DURATION_UNITS[element.duration];
     const type = MUSICXML_TYPE[element.duration];
 
@@ -196,7 +179,9 @@ export class ExportService {
       return `      <note>\n        <rest/>\n        <duration>${duration}</duration>\n        <type>${type}</type>\n      </note>`;
     }
 
-    const alter = element.pitch.accidental ? MUSICXML_ALTER[element.pitch.accidental] : 0;
+    // <alter> is the sounding alteration (key signature included); <accidental> only what is written.
+    const sounding = effectiveAccidental(element.pitch.accidental, keySignature, element.pitch.step);
+    const alter = sounding ? MUSICXML_ALTER[sounding] : 0;
     const alterXml = alter !== 0 ? `\n          <alter>${alter}</alter>` : '';
     const accidentalXml = element.pitch.accidental
       ? `\n        <accidental>${element.pitch.accidental}</accidental>`

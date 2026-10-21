@@ -1,0 +1,16 @@
+<select class="key-select" aria-label="Tonalitet" title="Tonalitet" (change)="onChange($event)">
+  <optgroup label="Dur">
+    @for (option of majorKeys; track option.value) {
+      <option [value]="option.value" [selected]="option.value === scoreModel.score().keySignature">
+        {{ option.label }}
+      </option>
+    }
+  </optgroup>
+  <optgroup label="Mol">
+    @for (option of minorKeys; track option.value) {
+      <option [value]="option.value" [selected]="option.value === scoreModel.score().keySignature">
+        {{ option.label }}
+      </option>
+    }
+  </optgroup>
+</select>

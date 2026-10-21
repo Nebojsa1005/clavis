@@ -1,3 +1,4 @@
+import { effectiveAccidental } from './key-signature.util';
 import { Clef, NoteDuration, NotePitch, Score, Step, TimeSignature } from './score.model';
 
 const DIATONIC_ORDER: Step[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
@@ -57,9 +58,10 @@ const ACCIDENTAL_SUFFIX: Record<'sharp' | 'flat' | 'natural', string> = {
   natural: '',
 };
 
-/** Tone.js notacija (npr. "C#4") za internu visinu tona. */
-export function toToneNoteName(pitch: NotePitch): string {
-  const suffix = pitch.accidental ? ACCIDENTAL_SUFFIX[pitch.accidental] : '';
+/** Tone.js note name (e.g. "C#4"); a note without its own accidental follows the key signature. */
+export function toToneNoteName(pitch: NotePitch, keySignature = 'C'): string {
+  const accidental = effectiveAccidental(pitch.accidental, keySignature, pitch.step);
+  const suffix = accidental ? ACCIDENTAL_SUFFIX[accidental] : '';
   return `${pitch.step}${suffix}${pitch.octave}`;
 }
 
@@ -88,7 +90,7 @@ export function buildPlaybackSchedule(score: Score, bpm: number): PlaybackSchedu
     for (const element of measure.elements) {
       const durationSeconds = durationToBeats(element.duration, score.timeSignature) * beatSeconds;
       if (element.kind === 'note') {
-        notes.push({ offsetSeconds: elapsed, durationSeconds, noteName: toToneNoteName(element.pitch) });
+        notes.push({ offsetSeconds: elapsed, durationSeconds, noteName: toToneNoteName(element.pitch, score.keySignature) });
       }
       elapsed += durationSeconds;
     }

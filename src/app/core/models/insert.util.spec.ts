@@ -1,4 +1,4 @@
-import { insertWithReflow } from './insert.util';
+import { changeTimeSignature, insertWithReflow } from './insert.util';
 import { createEmptyScore, createMeasure, createNote, createRest, MeasureElement, Score } from './score.model';
 
 function scoreOf(...measures: MeasureElement[][]): Score {
@@ -87,5 +87,61 @@ describe('insertWithReflow', () => {
 
     expect(stepsOf(result, 0)).toEqual(['G', 'C', 'D']);
     expect(stepsOf(result, 1)).toEqual(['E']);
+  });
+});
+
+describe('changeTimeSignature', () => {
+  it('only swaps the time signature when everything still fits', () => {
+    const score = scoreOf(quarters('C', 'D'));
+
+    const result = changeTimeSignature(score, { numerator: 3, denominator: 4 });
+
+    expect(result.timeSignature).toEqual({ numerator: 3, denominator: 4 });
+    expect(stepsOf(result, 0)).toEqual(['C', 'D']);
+    expect(result.measures.length).toBe(1);
+  });
+
+  it('moves the overflow of a shrinking measure into the next one', () => {
+    const score = scoreOf(quarters('C', 'D', 'E', 'F'));
+
+    const result = changeTimeSignature(score, { numerator: 3, denominator: 4 });
+
+    expect(stepsOf(result, 0)).toEqual(['C', 'D', 'E']);
+    expect(stepsOf(result, 1)).toEqual(['F']);
+  });
+
+  it('reflows every measure, not only the first', () => {
+    const score = scoreOf(quarters('C', 'D', 'E', 'F'), quarters('C', 'D', 'E', 'F'));
+
+    const result = changeTimeSignature(score, { numerator: 2, denominator: 4 });
+
+    expect(result.measures.map((m) => m.elements.length)).toEqual([2, 2, 2, 2]);
+  });
+
+  it('keeps the total number of elements', () => {
+    const score = scoreOf(quarters('C', 'D', 'E', 'F'), quarters('G', 'C'));
+
+    const result = changeTimeSignature(score, { numerator: 3, denominator: 8 });
+
+    const total = result.measures.reduce((sum, m) => sum + m.elements.length, 0);
+    expect(total).toBe(6);
+  });
+
+  it('uses the new denominator for the capacity (6/8 holds six eighths)', () => {
+    const eighths = Array.from({ length: 8 }, () => createNote('C', 4, 'eighth'));
+    const score = scoreOf(eighths);
+
+    const result = changeTimeSignature(score, { numerator: 6, denominator: 8 });
+
+    expect(result.measures.map((m) => m.elements.length)).toEqual([6, 2]);
+  });
+
+  it('does not mutate the input score', () => {
+    const score = scoreOf(quarters('C', 'D', 'E', 'F'));
+
+    changeTimeSignature(score, { numerator: 3, denominator: 4 });
+
+    expect(score.timeSignature).toEqual({ numerator: 4, denominator: 4 });
+    expect(score.measures.length).toBe(1);
   });
 });

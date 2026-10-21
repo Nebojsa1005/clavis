@@ -83,6 +83,52 @@ describe('ScoreModelService', () => {
     });
   });
 
+  describe('setTimeSignature', () => {
+    const fourQuarters = () => {
+      service.replaceScore(createEmptyScore());
+      for (const step of ['C', 'D', 'E', 'F'] as const) {
+        service.appendElement(createNote(step, 4, 'quarter'));
+      }
+    };
+
+    it('applies a valid time signature and reflows the measures', () => {
+      fourQuarters();
+
+      expect(service.setTimeSignature({ numerator: 3, denominator: 4 })).toBeTrue();
+
+      expect(service.score().timeSignature).toEqual({ numerator: 3, denominator: 4 });
+      expect(service.score().measures.map((m) => m.elements.length)).toEqual([3, 1]);
+    });
+
+    it('rejects an invalid time signature without touching the score', () => {
+      fourQuarters();
+      const before = service.score();
+
+      expect(service.setTimeSignature({ numerator: 0, denominator: 4 })).toBeFalse();
+      expect(service.setTimeSignature({ numerator: 4, denominator: 5 })).toBeFalse();
+
+      expect(service.score()).toBe(before);
+    });
+
+    it('is undone in one step', () => {
+      fourQuarters();
+
+      service.setTimeSignature({ numerator: 3, denominator: 4 });
+      service.undo();
+
+      expect(service.score().timeSignature).toEqual({ numerator: 4, denominator: 4 });
+      expect(service.score().measures.length).toBe(1);
+    });
+
+    it('does not add an undo step when nothing changes', () => {
+      service.replaceScore(createEmptyScore());
+
+      expect(service.setTimeSignature({ numerator: 4, denominator: 4 })).toBeTrue();
+
+      expect(service.canUndo()).toBeFalse();
+    });
+  });
+
   describe('insertElement', () => {
     it('inserts in the middle of a measure and shifts the rest', () => {
       service.replaceScore(createEmptyScore());

@@ -1,7 +1,8 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { insertWithReflow } from '../models/insert.util';
+import { changeTimeSignature, insertWithReflow } from '../models/insert.util';
 import { durationToBeats, stepDiatonic } from '../models/notation.util';
-import { Clef, createMeasure, createTestScore, MeasureElement, Score } from '../models/score.model';
+import { Clef, createMeasure, createTestScore, MeasureElement, Score, TimeSignature } from '../models/score.model';
+import { validateTimeSignature } from '../models/time-signature.util';
 
 const MAX_HISTORY = 20;
 
@@ -50,6 +51,22 @@ export class ScoreModelService {
       return;
     }
     this.mutate((score) => ({ ...score, clef }));
+  }
+
+  /**
+   * Changes the time signature; measures that no longer fit spill into the following ones.
+   * Returns false (and changes nothing) for an invalid time signature.
+   */
+  setTimeSignature(timeSignature: TimeSignature): boolean {
+    if (validateTimeSignature(timeSignature.numerator, timeSignature.denominator) !== null) {
+      return false;
+    }
+    const current = this.scoreState().timeSignature;
+    if (current.numerator === timeSignature.numerator && current.denominator === timeSignature.denominator) {
+      return true;
+    }
+    this.mutate((score) => changeTimeSignature(score, timeSignature));
+    return true;
   }
 
   /** Inserts an element before `index` in a measure; overflow spills into the following measures. */

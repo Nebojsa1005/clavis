@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { KEY_SIGNATURE_OPTIONS } from '../models/key-signature.util';
-import { CLEFS, createEmptyScore, createMeasure, createNote, createRest } from '../models/score.model';
+import { Clef, CLEFS, createEmptyScore, createMeasure, createNote, createRest, NoteDuration, Step } from '../models/score.model';
 import { createPart } from '../models/score-document';
 import { NotationRendererService, CARET_CLASS, SCORE_ELEMENT_ID_ATTR, SCORE_STAFF_ID_ATTR } from './notation-renderer.service';
 
@@ -438,6 +438,110 @@ describe('NotationRendererService', () => {
 
       const node = container.querySelector(`[${SCORE_ELEMENT_ID_ATTR}="${bassNote.id}"]`) as SVGElement;
       expect(node.getAttribute('fill')).toBe('#3b5bfd');
+    });
+  });
+
+  describe('stem direction', () => {
+    type Direction = 'up' | 'down' | 'none';
+
+    /** A stem that reaches above its note head points up, one that reaches below points down. */
+    function stemOf(step: Step, octave: number, clef: Clef, duration: NoteDuration = 'quarter'): Direction {
+      const score = createEmptyScore(clef);
+      score.measures[0].elements.push(createNote(step, octave, duration));
+      service.render(container, score);
+
+      const stem = container.querySelector('.vf-stem');
+      const head = container.querySelector('.vf-notehead');
+      if (!stem || !head) {
+        return 'none';
+      }
+      const stemBox = stem.getBoundingClientRect();
+      const headBox = head.getBoundingClientRect();
+      return stemBox.top + stemBox.bottom < headBox.top + headBox.bottom ? 'up' : 'down';
+    }
+
+    it('points up below the middle line and down from the middle line up (treble clef)', () => {
+      expect(stemOf('C', 4, 'treble')).toBe('up');
+      expect(stemOf('E', 4, 'treble')).toBe('up');
+      expect(stemOf('G', 4, 'treble')).toBe('up');
+      // the text book rule: up to A4 (second space), down from B4 (the third line)
+      expect(stemOf('A', 4, 'treble')).toBe('up');
+      expect(stemOf('B', 4, 'treble')).toBe('down');
+      expect(stemOf('C', 5, 'treble')).toBe('down');
+      expect(stemOf('F', 5, 'treble')).toBe('down');
+      expect(stemOf('C', 6, 'treble')).toBe('down');
+    });
+
+    it('uses the middle line of the bass clef (D3)', () => {
+      expect(stemOf('B', 2, 'bass')).toBe('up');
+      expect(stemOf('C', 3, 'bass')).toBe('up');
+      expect(stemOf('D', 3, 'bass')).toBe('down');
+      expect(stemOf('E', 3, 'bass')).toBe('down');
+      expect(stemOf('A', 3, 'bass')).toBe('down');
+    });
+
+    it('uses the middle line of the alto clef (C4)', () => {
+      expect(stemOf('B', 3, 'alto')).toBe('up');
+      expect(stemOf('C', 4, 'alto')).toBe('down');
+      expect(stemOf('D', 4, 'alto')).toBe('down');
+    });
+
+    it('uses the middle line of the tenor clef (A3)', () => {
+      expect(stemOf('G', 3, 'tenor')).toBe('up');
+      expect(stemOf('A', 3, 'tenor')).toBe('down');
+      expect(stemOf('B', 3, 'tenor')).toBe('down');
+    });
+
+    it('follows the same rule for shorter notes, which also carry a flag', () => {
+      expect(stemOf('C', 4, 'treble', 'eighth')).toBe('up');
+      expect(stemOf('C', 6, 'treble', 'eighth')).toBe('down');
+      expect(stemOf('G', 4, 'treble', 'sixteenth')).toBe('up');
+      expect(stemOf('G', 5, 'treble', 'sixtyfourth')).toBe('down');
+      expect(stemOf('C', 4, 'treble', 'half')).toBe('up');
+      expect(stemOf('C', 6, 'treble', 'half')).toBe('down');
+    });
+
+    it('draws no stem for a whole note', () => {
+      expect(stemOf('C', 4, 'treble', 'whole')).toBe('none');
+      expect(stemOf('C', 6, 'treble', 'whole')).toBe('none');
+    });
+
+    it('changes direction when the clef changes, since the middle line moves', () => {
+      // C4 sits far below the treble middle line but exactly on the alto one
+      expect(stemOf('C', 4, 'treble')).toBe('up');
+      expect(stemOf('C', 4, 'alto')).toBe('down');
+    });
+
+    it('gives each staff of a grand staff stems by its own clef', () => {
+      const treble = createEmptyScore('treble');
+      treble.measures[0].elements.push(createNote('C', 6, 'quarter'), createNote('C', 4, 'quarter'));
+      const bass = createEmptyScore('bass');
+      bass.measures[0].elements.push(createNote('E', 3, 'quarter'), createNote('C', 3, 'quarter'));
+
+      service.render(container, { parts: [createPart('Klavir', [treble, bass])] });
+
+      const directions = Array.from(container.querySelectorAll('.vf-stavenote')).map((note) => {
+        const stem = note.querySelector('.vf-stem')!.getBoundingClientRect();
+        const head = note.querySelector('.vf-notehead')!.getBoundingClientRect();
+        return stem.top + stem.bottom < head.top + head.bottom ? 'up' : 'down';
+      });
+      expect(directions).toEqual(['down', 'up', 'down', 'up']);
+    });
+
+    it('puts the stem on the right of the head when it points up and on the left when it points down', () => {
+      const score = createEmptyScore();
+      score.measures[0].elements.push(createNote('C', 4, 'quarter'), createNote('C', 6, 'quarter'));
+
+      service.render(container, score);
+
+      const [low, high] = Array.from(container.querySelectorAll('.vf-stavenote'));
+      const sideOf = (note: Element) => {
+        const stem = note.querySelector('.vf-stem')!.getBoundingClientRect();
+        const head = note.querySelector('.vf-notehead')!.getBoundingClientRect();
+        return stem.left + stem.right > head.left + head.right ? 'right' : 'left';
+      };
+      expect(sideOf(low)).toBe('right');
+      expect(sideOf(high)).toBe('left');
     });
   });
 });

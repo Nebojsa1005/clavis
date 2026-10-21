@@ -379,7 +379,8 @@ export class NotationRendererService {
     }
 
     const key = `${element.pitch.step.toLowerCase()}/${element.pitch.octave}`;
-    const note = new StaveNote({ keys: [key], duration, clef });
+    // autoStem: stem up for notes below the middle line, down for the middle line and above.
+    const note = new StaveNote({ keys: [key], duration, clef, autoStem: true });
     if (element.pitch.accidental) {
       note.addModifier(new Accidental(VEXFLOW_ACCIDENTAL[element.pitch.accidental]));
     }

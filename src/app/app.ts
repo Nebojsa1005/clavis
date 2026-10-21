@@ -3,6 +3,7 @@ import { createEmptyScore, NoteDuration } from './core/models/score.model';
 import { ExportService } from './core/services/export.service';
 import { PersistenceService } from './core/services/persistence.service';
 import { PlaybackService } from './core/services/playback.service';
+import { CaretService } from './core/state/caret.service';
 import { NoteInputService } from './core/state/note-input.service';
 import { ScoreModelService } from './core/state/score-model.service';
 import { SelectionService } from './core/state/selection.service';
@@ -34,6 +35,7 @@ export class App {
   protected readonly noteInput = inject(NoteInputService);
   protected readonly scoreModel = inject(ScoreModelService);
   protected readonly selection = inject(SelectionService);
+  private readonly caret = inject(CaretService);
   protected readonly playback = inject(PlaybackService);
   private readonly exportService = inject(ExportService);
   private readonly persistence = inject(PersistenceService);
@@ -180,6 +182,14 @@ export class App {
     }
 
     switch (event.key) {
+      case 'ArrowLeft':
+        this.caret.moveLeft();
+        event.preventDefault();
+        break;
+      case 'ArrowRight':
+        this.caret.moveRight();
+        event.preventDefault();
+        break;
       case 'ArrowUp':
         this.noteInput.nudgeLastPitch(1);
         event.preventDefault();

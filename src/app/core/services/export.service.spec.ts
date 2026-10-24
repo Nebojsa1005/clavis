@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { createEmptyScore, createNote, createRest } from '../models/score.model';
+import { createEmptyScore, createMeasure, createNote, createRest } from '../models/score.model';
 import { createPart } from '../models/score-document';
 import { ExportService } from './export.service';
 
@@ -227,6 +227,33 @@ describe('ExportService', () => {
       expect(blob.type).toBe('image/png');
       expect(blob.size).toBeGreaterThan(0);
     });
+
+    it('embeds the music font and prints the title', () => {
+      const svgString = service.toSvgString(createEmptyScore(), 'Naslov');
+
+      expect(svgString).toContain('@font-face');
+      expect(svgString).toContain('data:font/woff2');
+      expect(svgString).toContain('>Naslov</text>');
+    });
+
+    it('uses "Partitura" as the title when none is given', () => {
+      expect(service.toSvgString(createEmptyScore())).toContain('>Partitura</text>');
+    });
+  });
+
+  describe('toPdfBlob', () => {
+    it('produces an A4 PDF with one page per sheet page', async () => {
+      const score = createEmptyScore();
+      score.measures = Array.from({ length: 50 }, () => createMeasure([createNote('C', 4, 'whole')]));
+
+      const blob = await service.toPdfBlob(score, 'Dugo');
+      const text = await blob.text();
+
+      expect(blob.type).toBe('application/pdf');
+      expect(text.startsWith('%PDF')).toBeTrue();
+      expect(text.match(/\/Type \/Page\b/g)?.length).toBeGreaterThan(1);
+      expect(text).toMatch(/\/MediaBox \[0 0 595\.2\d* 841\.8\d*\]/);
+    }, 30000);
   });
 });
 

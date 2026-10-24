@@ -23,6 +23,7 @@
             ],
             "tsConfig": "tsconfig.app.json",
             "inlineStyleLanguage": "scss",
+            "allowedCommonJsDependencies": ["core-js", "html2canvas", "raf", "rgbcolor"],
             "assets": [
               {
                 "glob": "**/*",

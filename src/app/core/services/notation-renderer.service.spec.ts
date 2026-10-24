@@ -12,8 +12,16 @@ import {
   Score,
   Step,
 } from '../models/score.model';
-import { createPart } from '../models/score-document';
-import { NotationRendererService, CARET_CLASS, SCORE_ELEMENT_ID_ATTR, SCORE_STAFF_ID_ATTR } from './notation-renderer.service';
+import { createPart, documentFromScore } from '../models/score-document';
+import {
+  CARET_CLASS,
+  MeasureLayout,
+  NotationRendererService,
+  SCORE_ELEMENT_ID_ATTR,
+  SCORE_STAFF_ID_ATTR,
+  SHEET_PAGE_HEIGHT,
+  SHEET_WIDTH,
+} from './notation-renderer.service';
 
 describe('NotationRendererService', () => {
   let service: NotationRendererService;
@@ -662,6 +670,108 @@ describe('NotationRendererService', () => {
       const colored = beams.filter((beam) => beam.querySelector('[fill="#3b5bfd"]') || beam.getAttribute('fill') === '#3b5bfd');
       expect(beams.length).toBe(2);
       expect(colored.length).toBe(1);
+    });
+  });
+  describe('sheet', () => {
+    const longScore = (measures: number): Score => ({
+      ...createEmptyScore(),
+      measures: Array.from({ length: measures }, () =>
+        createMeasure([createNote('C', 4, 'quarter'), createNote('D', 4, 'quarter'), createNote('E', 4, 'quarter'), createNote('F', 4, 'quarter')]),
+      ),
+    });
+    const textsOf = (svg: SVGSVGElement) =>
+      Array.from(svg.querySelectorAll('text'))
+        .filter((node) => node.getAttribute('font-family')?.includes('Georgia'))
+        .map((node) => ({ text: node.textContent, x: Number(node.getAttribute('x')), y: Number(node.getAttribute('y')) }));
+
+    it('prints the title above the music', () => {
+      const [svg] = service.renderSheet(container, longScore(1), { title: 'Moja pesma' });
+
+      expect(textsOf(svg)[0].text).toBe('Moja pesma');
+      expect(svg.querySelectorAll('.vf-stavenote').length).toBe(4);
+    });
+
+    it('breaks the measures into several systems one below the other', () => {
+      const [svg] = service.renderSheet(container, longScore(12), { title: 'T' });
+      const staveYs = new Set(Array.from(svg.querySelectorAll('.vf-stave path')).map((path) => path.getBoundingClientRect().top));
+
+      expect(svg.querySelectorAll('.vf-stavenote').length).toBe(48);
+      expect(Number(svg.getAttribute('width'))).toBe(SHEET_WIDTH);
+      // Several rows of stave lines means more than one system.
+      expect(staveYs.size).toBeGreaterThan(5);
+    });
+
+    it('splits into pages of the given height, with the title only on the first one', () => {
+      const pages = service.renderSheet(container, longScore(80), { title: 'Dugo', pageHeight: SHEET_PAGE_HEIGHT });
+
+      expect(pages.length).toBeGreaterThan(1);
+      pages.forEach((page) => expect(Number(page.getAttribute('height'))).toBe(SHEET_PAGE_HEIGHT));
+      expect(textsOf(pages[0]).map((text) => text.text)).toContain('Dugo');
+      expect(textsOf(pages[1]).map((text) => text.text)).not.toContain('Dugo');
+      const notes = pages.reduce((sum, page) => sum + page.querySelectorAll('.vf-stavenote').length, 0);
+      expect(notes).toBe(320);
+    });
+
+    it('prints the text of a staff word by word, under the notes it was typed under', () => {
+      const doc = documentFromScore(longScore(1));
+      service.render(container, doc);
+      const layout = (service as unknown as { layouts: Map<string, MeasureLayout[]> }).layouts.get(doc.parts[0].staves[0].id)!;
+      // Put a syllable under the 1st and the 3rd note, measured in editor characters.
+      const charWidth = (service as unknown as { editorCharWidth(): number }).editorCharWidth();
+      const column = (x: number) => Math.ceil((x - 17) / charWidth);
+      const [first, , third] = layout[0].noteXs;
+      doc.parts[0].staves[0].text = 'Ky'.padStart(column(first) + 2) + 'ri'.padStart(column(third) - column(first));
+
+      const [svg] = service.renderSheet(container, doc, { title: 'T' });
+      const words = textsOf(svg).slice(1);
+      const svgLeft = svg.getBoundingClientRect().left;
+      const noteXs = Array.from(svg.querySelectorAll('.vf-stavenote')).map((note) => note.getBoundingClientRect().left - svgLeft);
+
+      expect(words.map((word) => word.text)).toEqual(['Ky', 'ri']);
+      // Each word starts at its note head, give or take a few px of the head's own width.
+      expect(Math.abs(words[0].x - noteXs[0])).toBeLessThan(10);
+      expect(Math.abs(words[1].x - noteXs[2])).toBeLessThan(10);
+      expect(words[0].y).toBe(words[1].y);
+    });
+
+    it('widens a measure whose text would not fit, so fewer measures share its system', () => {
+      const measuresInFirstSystem = (svg: SVGSVGElement) => {
+        const staves = Array.from(svg.querySelectorAll('.vf-stave')).map((stave) => stave.getBoundingClientRect().top);
+        return staves.filter((top) => top === staves[0]).length;
+      };
+      const plain = documentFromScore(longScore(8));
+      const withText = documentFromScore(longScore(8));
+      withText.parts[0].staves[0].text = 'Ovo je jedan prilično dugačak red teksta pod prvim taktom';
+
+      const [plainSvg] = service.renderSheet(container, plain, { title: 'T' });
+      const [textSvg] = service.renderSheet(container, withText, { title: 'T' });
+
+      expect(measuresInFirstSystem(textSvg)).toBeLessThan(measuresInFirstSystem(plainSvg));
+    });
+
+    it('puts a second line of text below the first', () => {
+      const doc = documentFromScore(longScore(1));
+      doc.parts[0].staves[0].text = 'gore\ndole';
+
+      const [svg] = service.renderSheet(container, doc, { title: 'T' });
+      const [upper, lower] = textsOf(svg).slice(1);
+
+      expect(lower.y).toBeGreaterThan(upper.y);
+    });
+
+    it('leaves the editor layout and text fields alone', () => {
+      service.render(container, longScore(2));
+      const slots = service.getStaffTextSlots();
+      const caretX = service.getCaretX({ measureIndex: 1, voice: 0, tick: 0 });
+
+      const sheetHost = document.createElement('div');
+      document.body.appendChild(sheetHost);
+      service.renderSheet(sheetHost, longScore(9), { title: 'T' });
+      sheetHost.remove();
+
+      expect(service.getStaffTextSlots()).toBe(slots);
+      expect(service.getCaretX({ measureIndex: 1, voice: 0, tick: 0 })).toBe(caretX);
+      expect(service.getCaretX({ measureIndex: 5, voice: 0, tick: 0 })).toBeNull();
     });
   });
 });

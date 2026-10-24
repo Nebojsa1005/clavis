@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component, HostListener, computed, inject, signal } from '@angular/core';
 import { Clef, CLEFS, NoteDuration } from './core/models/score.model';
-import { ExportService } from './core/services/export.service';
+import { DEFAULT_SHEET_TITLE, ExportService } from './core/services/export.service';
 import { PersistenceService } from './core/services/persistence.service';
 import { PlaybackService } from './core/services/playback.service';
 import { CaretService } from './core/state/caret.service';
 import { EditingService } from './core/state/editing.service';
 import { NoteInputService } from './core/state/note-input.service';
-import { ScoreSessionService } from './core/state/score-session.service';
+import { ScoreSessionService, UNTITLED_SCORE_NAME } from './core/state/score-session.service';
 import { ScoreModelService } from './core/state/score-model.service';
 import { SelectionService } from './core/state/selection.service';
 import { KeySignatureControl } from './features/key-signature-control/key-signature-control';
@@ -200,11 +200,21 @@ export class App {
   }
 
   protected onExportSvg(): void {
-    this.exportService.downloadSvg(this.scoreModel.document());
+    this.exportService.downloadSvg(this.scoreModel.document(), this.sheetTitle());
   }
 
   protected onExportPng(): void {
-    void this.exportService.downloadPng(this.scoreModel.document());
+    void this.exportService.downloadPng(this.scoreModel.document(), this.sheetTitle());
+  }
+
+  protected onExportPdf(): void {
+    void this.exportService.downloadPdf(this.scoreModel.document(), this.sheetTitle());
+  }
+
+  /** The score's name for printed exports; an unnamed score is just "Partitura". */
+  private sheetTitle(): string {
+    const name = this.session.currentName();
+    return name === UNTITLED_SCORE_NAME ? DEFAULT_SHEET_TITLE : name;
   }
 
   @HostListener('document:keydown', ['$event'])

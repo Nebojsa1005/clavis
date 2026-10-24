@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import MidiWriter from 'midi-writer-js';
+import { Bravura } from 'vexflow-bravura-font';
 import { elementTicks, TICKS_PER_WHOLE } from '../models/caret.util';
 import { effectiveAccidental, findKeySignature } from '../models/key-signature.util';
 import { toToneNoteName } from '../models/notation.util';
@@ -8,7 +9,22 @@ import { allStaves, asDocument, Part, ScoreDocument } from '../models/score-docu
 import { beamGroups, beamLevels } from '../models/beam.util';
 import { tieLinks, tiedTargetIds } from '../models/tie.util';
 import { triggerDownload } from '../utils/download.util';
-import { NotationRendererService } from './notation-renderer.service';
+import { NotationRendererService, SHEET_PAGE_HEIGHT, SheetOptions } from './notation-renderer.service';
+
+/** Title printed on a sheet when the piece has no name of its own. */
+export const DEFAULT_SHEET_TITLE = 'Partitura';
+const SVG_NS = 'http://www.w3.org/2000/svg';
+/** PNG pixels per sheet px; the sheet is 1190 px wide, so the PNG is 2380 px wide. */
+const PNG_SCALE = 2;
+/** Sheet px → PDF page image px; 1190 × 2.5 ≈ 2975 px across 210 mm, about 360 dpi. */
+const PDF_SCALE = 2.5;
+const A4_WIDTH_MM = 210;
+const A4_HEIGHT_MM = 297;
+
+/** A title as a file name: characters Windows and macOS refuse are dropped. */
+function fileNameOf(title: string): string {
+  return title.replace(/[\\/:*?"<>|]+/g, '').trim() || DEFAULT_SHEET_TITLE;
+}
 
 function escapeXml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -189,34 +205,36 @@ export class ExportService {
     return track;
   }
 
-  toSvgString(score: Score | ScoreDocument): string {
-    const svg = this.renderOffscreenSvg(score);
+  /** The piece as printed music (title, systems, text under the staves) on one long sheet. */
+  toSvgString(score: Score | ScoreDocument, title = DEFAULT_SHEET_TITLE): string {
+    const [svg] = this.renderSheetSvgs(score, { title });
     return new XMLSerializer().serializeToString(svg);
   }
 
-  async toPngBlob(score: Score | ScoreDocument): Promise<Blob> {
-    const svg = this.renderOffscreenSvg(score);
-    const width = Number(svg.getAttribute('width'));
-    const height = Number(svg.getAttribute('height'));
-    const svgBlob = new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(svgBlob);
+  /** The same sheet as `toSvgString`, as a PNG at twice the sheet's resolution. */
+  async toPngBlob(score: Score | ScoreDocument, title = DEFAULT_SHEET_TITLE): Promise<Blob> {
+    const [svg] = this.renderSheetSvgs(score, { title });
+    const canvas = await this.rasterize(svg, PNG_SCALE);
+    return new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('canvas.toBlob nije vratio blob'))), 'image/png');
+    });
+  }
 
-    try {
-      const image = await this.loadImage(url);
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d')!;
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, width, height);
-      ctx.drawImage(image, 0, 0, width, height);
-
-      return await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('canvas.toBlob nije vratio blob'))), 'image/png');
-      });
-    } finally {
-      URL.revokeObjectURL(url);
+  /** The piece on A4 pages, ready to print. Each page is embedded as a high-resolution image. */
+  async toPdfBlob(score: Score | ScoreDocument, title = DEFAULT_SHEET_TITLE): Promise<Blob> {
+    const pages = this.renderSheetSvgs(score, { title, pageHeight: SHEET_PAGE_HEIGHT });
+    // jsPDF is big and only needed here, so it is loaded on the first PDF export.
+    const { jsPDF } = await import('jspdf');
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    pdf.setProperties({ title });
+    for (const [index, svg] of pages.entries()) {
+      const canvas = await this.rasterize(svg, PDF_SCALE);
+      if (index > 0) {
+        pdf.addPage();
+      }
+      pdf.addImage(canvas, 'PNG', 0, 0, A4_WIDTH_MM, A4_HEIGHT_MM, undefined, 'FAST');
     }
+    return pdf.output('blob');
   }
 
   downloadMusicXml(score: Score | ScoreDocument, filename = 'partitura.musicxml'): void {
@@ -227,12 +245,16 @@ export class ExportService {
     triggerDownload(new Blob([this.toMidi(score, bpm) as BlobPart], { type: 'audio/midi' }), filename);
   }
 
-  downloadSvg(score: Score | ScoreDocument, filename = 'partitura.svg'): void {
-    this.downloadText(this.toSvgString(score), filename, 'image/svg+xml');
+  downloadSvg(score: Score | ScoreDocument, title = DEFAULT_SHEET_TITLE): void {
+    this.downloadText(this.toSvgString(score, title), `${fileNameOf(title)}.svg`, 'image/svg+xml');
   }
 
-  async downloadPng(score: Score | ScoreDocument, filename = 'partitura.png'): Promise<void> {
-    triggerDownload(await this.toPngBlob(score), filename);
+  async downloadPng(score: Score | ScoreDocument, title = DEFAULT_SHEET_TITLE): Promise<void> {
+    triggerDownload(await this.toPngBlob(score, title), `${fileNameOf(title)}.png`);
+  }
+
+  async downloadPdf(score: Score | ScoreDocument, title = DEFAULT_SHEET_TITLE): Promise<void> {
+    triggerDownload(await this.toPdfBlob(score, title), `${fileNameOf(title)}.pdf`);
   }
 
   private partToXml(part: Part, partIndex: number, key: { fifths: number; mode: 'major' | 'minor' }, ties: NoteMarks): string {
@@ -325,20 +347,49 @@ ${staves}${clefs}
     ].join('\n');
   }
 
-  private renderOffscreenSvg(score: Score | ScoreDocument): SVGSVGElement {
-    const container = document.createElement('div');
-    container.style.position = 'absolute';
-    container.style.visibility = 'hidden';
-    document.body.appendChild(container);
+  /**
+   * Sheet pages as standalone SVGs: white background, and the music font embedded, because an SVG
+   * opened as a file or drawn as an image cannot see the fonts the page loaded.
+   */
+  private renderSheetSvgs(score: Score | ScoreDocument, options: SheetOptions): SVGSVGElement[] {
+    const host = document.createElement('div');
+    host.style.position = 'absolute';
+    host.style.visibility = 'hidden';
+    document.body.appendChild(host);
     try {
-      this.notationRenderer.render(container, score);
-      const svg = container.querySelector('svg');
-      if (!svg) {
-        throw new Error('VexFlow render nije proizveo <svg>');
-      }
-      return svg as SVGSVGElement;
+      return this.notationRenderer.renderSheet(host, score, options).map((svg) => {
+        const style = document.createElementNS(SVG_NS, 'style');
+        style.textContent = `@font-face { font-family: "Bravura"; src: url("${Bravura}") format("woff2"); }`;
+        const background = document.createElementNS(SVG_NS, 'rect');
+        background.setAttribute('width', '100%');
+        background.setAttribute('height', '100%');
+        background.setAttribute('fill', '#ffffff');
+        svg.prepend(style, background);
+        return svg;
+      });
     } finally {
-      container.remove();
+      host.remove();
+    }
+  }
+
+  /** Draws an SVG onto a canvas `scale` times its size. */
+  private async rasterize(svg: SVGSVGElement, scale: number): Promise<HTMLCanvasElement> {
+    const width = Number(svg.getAttribute('width'));
+    const height = Number(svg.getAttribute('height'));
+    const svgBlob = new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+    try {
+      const image = await this.loadImage(url);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(width * scale);
+      canvas.height = Math.round(height * scale);
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      return canvas;
+    } finally {
+      URL.revokeObjectURL(url);
     }
   }
 

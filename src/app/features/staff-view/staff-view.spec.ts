@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { createEmptyScore, createMeasure, createNote } from '../../core/models/score.model';
+import { createPart } from '../../core/models/score-document';
 import { NotationRendererService } from '../../core/services/notation-renderer.service';
 import { CaretService } from '../../core/state/caret.service';
 import { NoteInputService } from '../../core/state/note-input.service';
@@ -135,5 +136,23 @@ describe('StaffView', () => {
     expect(measures[1].elements.length).toBe(2);
     expect(measures[1].elements[0].kind).toBe('note');
     expect(caret.position()).toEqual({ measureIndex: 1, voice: 0, tick: 64 });
+  });
+
+  it('shows a text field under every staff and stores what is typed into it', () => {
+    renderSpy.and.callThrough();
+    scoreModel.replaceDocument({ parts: [createPart('Klavir', [createEmptyScore(), createEmptyScore('bass')])] });
+    const fixture = TestBed.createComponent(StaffView);
+    fixture.detectChanges();
+    fixture.detectChanges();
+
+    const fields = Array.from(fixture.nativeElement.querySelectorAll('textarea.staff-text')) as HTMLTextAreaElement[];
+    expect(fields.length).toBe(2);
+    expect(parseFloat(fields[1].style.top)).toBeGreaterThan(parseFloat(fields[0].style.top));
+
+    fields[1].value = 'Ky - ri - e';
+    fields[1].dispatchEvent(new Event('input'));
+
+    const bottomStaff = scoreModel.document().parts[0].staves[1];
+    expect(bottomStaff.text).toBe('Ky - ri - e');
   });
 });

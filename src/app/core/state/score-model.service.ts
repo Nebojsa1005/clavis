@@ -32,6 +32,8 @@ export class ScoreModelService {
   private readonly requestedStaffId = signal<string | null>(null);
   private readonly pastStack = signal<ScoreDocument[]>([]);
   private readonly futureStack = signal<ScoreDocument[]>([]);
+  /** Staff whose text the last edit changed; further typing there joins that undo step. */
+  private textEditStaffId: string | null = null;
 
   readonly document = this.documentState.asReadonly();
 
@@ -59,6 +61,7 @@ export class ScoreModelService {
     this.requestedStaffId.set(null);
     this.pastStack.set([]);
     this.futureStack.set([]);
+    this.textEditStaffId = null;
   }
 
   /** Chooses which staff the editing commands act on. Not an edit, so it is not undoable. */
@@ -155,6 +158,33 @@ export class ScoreModelService {
       return { ...doc, parts: reordered };
     });
     return true;
+  }
+
+  /**
+   * Sets the free text under a staff. Consecutive changes to the text of the same staff, with no
+   * other edit in between, form one undo step, so typing does not flood the history.
+   */
+  setStaffText(staffId: string, text: string): void {
+    const doc = this.documentState();
+    const staff = findStaff(doc, staffId);
+    if (!staff || (staff.text ?? '') === text) {
+      return;
+    }
+    const withText = (current: ScoreDocument): ScoreDocument => ({
+      ...current,
+      parts: current.parts.map((part) => ({
+        ...part,
+        staves: part.staves.map((candidate) => (candidate.id === staffId ? { ...candidate, text } : candidate)),
+      })),
+    });
+
+    if (this.textEditStaffId === staffId) {
+      this.futureStack.set([]);
+      this.documentState.set(withText(doc));
+    } else {
+      this.mutateDocument(withText);
+    }
+    this.textEditStaffId = staffId;
   }
 
   /** Changes the clef. Notes keep their pitch; only how they are drawn and entered changes. */
@@ -286,6 +316,7 @@ export class ScoreModelService {
       return;
     }
     const previous = past[past.length - 1];
+    this.textEditStaffId = null;
     this.pastStack.set(past.slice(0, -1));
     this.futureStack.update((future) => [...future, this.documentState()]);
     this.documentState.set(previous);
@@ -297,6 +328,7 @@ export class ScoreModelService {
       return;
     }
     const next = future[future.length - 1];
+    this.textEditStaffId = null;
     this.futureStack.set(future.slice(0, -1));
     this.pastStack.update((past) => [...past, this.documentState()]);
     this.documentState.set(next);
@@ -310,6 +342,7 @@ export class ScoreModelService {
 
   private mutateDocument(mutator: (doc: ScoreDocument) => ScoreDocument): void {
     const current = this.documentState();
+    this.textEditStaffId = null;
     this.pastStack.update((stack) => {
       const next = [...stack, current];
       return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next;

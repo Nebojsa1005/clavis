@@ -40,9 +40,9 @@ const MIN_CANVAS_HEIGHT = 200;
 /** Distance between the tops of two staves of one instrument (a grand staff) and of different instruments. */
 const STAFF_GAP_SAME_PART = 100;
 const STAFF_GAP_BETWEEN_PARTS = 130;
-/** Room kept below the last staff for low notes and ledger lines. */
-const CANVAS_BOTTOM_PADDING = 80;
-const STAVE_HEIGHT_TO_BOTTOM_LINE = 80;
+/** Text field under every staff: its distance from the bottom staff line (room for ledger lines) and its height. */
+const STAFF_TEXT_OFFSET_Y = 34;
+export const STAFF_TEXT_HEIGHT = 30;
 
 /** Mora pratiti vrednost --color-accent iz styles.scss (VexFlow ne čita CSS custom properties). */
 const SELECTED_NOTE_COLOR = '#3b5bfd';
@@ -59,6 +59,14 @@ const CARET_GAP_BEFORE_ACCIDENTAL = 18;
 const CARET_GAP_AFTER_LAST_NOTE = 24;
 /** How far the caret line extends above and below the staff lines. */
 const CARET_OVERSHOOT_Y = 14;
+
+/** Where the text field of a staff goes, in SVG px relative to the rendered score. */
+export interface StaffTextSlot {
+  staffId: string;
+  top: number;
+  left: number;
+  width: number;
+}
 
 export interface StaffGeometry {
   topLineY: number;
@@ -91,6 +99,7 @@ export class NotationRendererService {
   private layouts = new Map<string, MeasureLayout[]>();
   /** Y of the top line of every staff, in staff order, from the last render. */
   private staffTops: { id: string; topLineY: number }[] = [];
+  private textSlots: StaffTextSlot[] = [];
   /** Staff that position queries refer to when the caller does not name one. */
   private queryStaffId: string | null = null;
 
@@ -99,6 +108,11 @@ export class NotationRendererService {
     const known = this.staffTops.find((staff) => staff.id === staffId);
     const base = this.defaultStaffGeometry();
     return known ? { ...base, topLineY: known.topLineY } : base;
+  }
+
+  /** Text field position of every staff, in staff order, from the last render. */
+  getStaffTextSlots(): StaffTextSlot[] {
+    return this.textSlots;
   }
 
   /** Id of the staff nearest to a y coordinate (SVG px), or null before anything was rendered. */
@@ -171,7 +185,15 @@ export class NotationRendererService {
     this.staffTops = refs.map((ref, index) => ({ id: ref.staff.id, topLineY: staffYs[index] + (geometry.topLineY - STAVE_Y) }));
 
     const totalWidth = STAVE_MARGIN_X * 2 + STAVE_WIDTH * columns;
-    const height = Math.max(MIN_CANVAS_HEIGHT, staffYs[staffYs.length - 1] + STAVE_HEIGHT_TO_BOTTOM_LINE + CANVAS_BOTTOM_PADDING);
+    const bottomLineOffset = geometry.halfStepPx * 8;
+    this.textSlots = this.staffTops.map((staff) => ({
+      staffId: staff.id,
+      top: staff.topLineY + bottomLineOffset + STAFF_TEXT_OFFSET_Y,
+      left: STAVE_MARGIN_X,
+      width: STAVE_WIDTH * columns,
+    }));
+    const lastTextBottom = this.textSlots[this.textSlots.length - 1].top + STAFF_TEXT_HEIGHT;
+    const height = Math.max(MIN_CANVAS_HEIGHT, lastTextBottom + STAFF_TEXT_OFFSET_Y);
     const renderer = new Renderer(container, Renderer.Backends.SVG);
     renderer.resize(Math.max(totalWidth, container.clientWidth || totalWidth), height);
     const context = renderer.getContext();
@@ -217,14 +239,18 @@ export class NotationRendererService {
     return this.defaultGeometry;
   }
 
-  /** The y VexFlow gets for each staff: staves of one instrument sit closer than separate instruments. */
+  /**
+   * The y VexFlow gets for each staff: staves of one instrument sit closer than separate instruments,
+   * and every staff keeps room below it for its text field.
+   */
   private staffYs(refs: StaffRef[]): number[] {
     const ys: number[] = [];
     refs.forEach((ref, index) => {
       if (index === 0) {
         ys.push(STAVE_Y);
       } else {
-        ys.push(ys[index - 1] + (ref.staffIndex > 0 ? STAFF_GAP_SAME_PART : STAFF_GAP_BETWEEN_PARTS));
+        const gap = ref.staffIndex > 0 ? STAFF_GAP_SAME_PART : STAFF_GAP_BETWEEN_PARTS;
+        ys.push(ys[index - 1] + gap + STAFF_TEXT_OFFSET_Y + STAFF_TEXT_HEIGHT);
       }
     });
     return ys;

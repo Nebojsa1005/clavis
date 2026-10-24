@@ -10,6 +10,8 @@ import { sanitizeTies } from './tie.util';
 export interface Staff {
   readonly id: string;
   score: Score;
+  /** Free text written under the staff (lyrics, remarks, ...); unset = empty. */
+  text?: string;
 }
 
 export interface Part {
@@ -65,7 +67,11 @@ export function isScoreDocument(value: unknown): value is ScoreDocument {
         staves.length > 0 &&
         staves.every((staff: unknown) => {
           const entry = staff as Record<string, unknown> | null;
-          return typeof entry?.['id'] === 'string' && isScore(entry['score']);
+          return (
+            typeof entry?.['id'] === 'string' &&
+            isScore(entry['score']) &&
+            (entry['text'] === undefined || typeof entry['text'] === 'string')
+          );
         })
       );
     })

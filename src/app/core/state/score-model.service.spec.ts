@@ -947,4 +947,63 @@ describe('ScoreModelService', () => {
       expect(flags()).toEqual(['off', '-', 'off', '-']);
     });
   });
+
+  describe('staff text', () => {
+    const staffIds = () => allStaves(service.document()).map((ref) => ref.staff.id);
+    const textOf = (staffId: string) => findStaff(service.document(), staffId)?.text;
+
+    beforeEach(() => {
+      service.replaceDocument({ parts: [createPart('Klavir', [createEmptyScore(), createEmptyScore('bass')])] });
+    });
+
+    it('sets the text of one staff only', () => {
+      const [top, bottom] = staffIds();
+      service.setStaffText(bottom, 'Ky - ri - e');
+
+      expect(textOf(bottom)).toBe('Ky - ri - e');
+      expect(textOf(top)).toBeUndefined();
+    });
+
+    it('joins consecutive typing on one staff into a single undo step', () => {
+      const [top] = staffIds();
+      service.setStaffText(top, 'a');
+      service.setStaffText(top, 'ab');
+      service.setStaffText(top, 'abc');
+      service.undo();
+
+      expect(textOf(top)).toBeUndefined();
+      expect(service.canUndo()).toBeFalse();
+      service.redo();
+      expect(textOf(top)).toBe('abc');
+    });
+
+    it('starts a new undo step after another edit or on another staff', () => {
+      const [top, bottom] = staffIds();
+      service.setStaffText(top, 'a');
+      service.appendElement(createNote('C', 4, 'quarter'));
+      service.setStaffText(top, 'ab');
+      service.setStaffText(bottom, 'x');
+
+      service.undo();
+      expect(textOf(bottom)).toBeUndefined();
+      expect(textOf(top)).toBe('ab');
+      service.undo();
+      expect(textOf(top)).toBe('a');
+    });
+
+    it('ignores unknown staves and unchanged text', () => {
+      service.setStaffText('nope', 'x');
+      service.setStaffText(staffIds()[0], '');
+
+      expect(service.canUndo()).toBeFalse();
+    });
+
+    it('keeps the text through other edits of the staff', () => {
+      const [top] = staffIds();
+      service.setStaffText(top, 'tekst');
+      service.appendElement(createNote('C', 4, 'quarter'));
+
+      expect(textOf(top)).toBe('tekst');
+    });
+  });
 });

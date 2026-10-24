@@ -312,4 +312,149 @@ describe('EditingService', () => {
       expect(pasted).toEqual(['C', 'A']);
     });
   });
+
+  describe('beams', () => {
+    let eighths: MeasureElement[];
+    let quarters: MeasureElement[];
+
+    beforeEach(() => {
+      // measure 1: four eighths (two automatic beams), measure 2: four quarters
+      eighths = ['C', 'D', 'E', 'F'].map((s) => createNote(s as 'C', 4, 'eighth'));
+      quarters = ['C', 'D', 'E', 'F'].map((s) => createNote(s as 'C', 4, 'quarter'));
+      scoreModel.replaceScore({ ...createEmptyScore(), measures: [createMeasure(eighths), createMeasure(quarters)] });
+    });
+
+    const flags = () =>
+      scoreModel.score().measures.flatMap((m) => m.elements.map((el) => (el.kind === 'note' ? (el.beamToNext ?? '-') : 'r')));
+
+    it('separates a pair that is beamed automatically', () => {
+      selection.select(eighths[0].id);
+
+      editing.toggleBeam();
+
+      expect(flags().slice(0, 4)).toEqual(['off', '-', '-', '-']);
+    });
+
+    it('joins a pair that is not beamed automatically, across the beat', () => {
+      selection.select(eighths[1].id);
+
+      editing.toggleBeam();
+
+      expect(flags().slice(0, 4)).toEqual(['-', 'on', '-', '-']);
+    });
+
+    it('toggles back and forth', () => {
+      selection.select(eighths[1].id);
+
+      editing.toggleBeam();
+      editing.toggleBeam();
+      expect(flags().slice(0, 4)).toEqual(['-', 'off', '-', '-']);
+
+      editing.toggleBeam();
+      expect(flags().slice(0, 4)).toEqual(['-', 'on', '-', '-']);
+    });
+
+    it('joins a selected run into one group, and separates all of it the next time', () => {
+      selection.selectMany(eighths.map((el) => el.id));
+
+      editing.toggleBeam();
+      expect(flags().slice(0, 4)).toEqual(['on', 'on', 'on', '-']);
+
+      editing.toggleBeam();
+      expect(flags().slice(0, 4)).toEqual(['off', 'off', 'off', '-']);
+    });
+
+    it('only joins the selected notes to each other, not to what follows the selection', () => {
+      selection.selectMany([eighths[1].id, eighths[2].id]);
+
+      editing.toggleBeam();
+
+      expect(flags().slice(0, 4)).toEqual(['-', 'on', '-', '-']);
+    });
+
+    it('does nothing for notes that cannot be beamed', () => {
+      selection.selectMany(quarters.map((el) => el.id));
+
+      editing.toggleBeam();
+
+      expect(scoreModel.canUndo()).toBeFalse();
+    });
+
+    it('does nothing for a last note, a rest or without a selection', () => {
+      scoreModel.replaceScore({
+        ...createEmptyScore(),
+        measures: [createMeasure([createNote('C', 4, 'eighth'), createRest('eighth'), createNote('D', 4, 'eighth')])],
+      });
+      selection.selectAll();
+
+      editing.toggleBeam();
+      selection.clear();
+      editing.toggleBeam();
+
+      expect(scoreModel.canUndo()).toBeFalse();
+    });
+
+    it('does not join the last note of one measure to the first of the next', () => {
+      scoreModel.replaceScore({
+        ...createEmptyScore(),
+        measures: [
+          createMeasure([createNote('C', 4, 'quarter'), createNote('D', 4, 'quarter'), createNote('E', 4, 'quarter'), createNote('F', 4, 'eighth')]),
+          createMeasure([createNote('G', 4, 'eighth'), createNote('A', 4, 'quarter')]),
+        ],
+      });
+      selection.select(scoreModel.score().measures[0].elements[3].id);
+
+      editing.toggleBeam();
+
+      expect(scoreModel.canUndo()).toBeFalse();
+    });
+
+    it('is one undo step', () => {
+      selection.selectMany(eighths.map((el) => el.id));
+
+      editing.toggleBeam();
+      scoreModel.undo();
+
+      expect(flags().slice(0, 4)).toEqual(['-', '-', '-', '-']);
+    });
+
+    it('reports whether the selection is beamed', () => {
+      selection.select(eighths[0].id);
+      expect(editing.selectionBeamed()).toBeTrue();
+
+      selection.select(eighths[1].id);
+      expect(editing.selectionBeamed()).toBeFalse();
+
+      selection.select(quarters[0].id);
+      expect(editing.selectionBeamed()).toBeFalse();
+    });
+
+    describe('resetBeams', () => {
+      it('hands manually set notes back to automatic', () => {
+        selection.selectMany(eighths.map((el) => el.id));
+        editing.toggleBeam();
+
+        editing.resetBeams();
+
+        expect(flags().slice(0, 4)).toEqual(['-', '-', '-', '-']);
+      });
+
+      it('only touches the selected notes', () => {
+        scoreModel.setBeams([eighths[0].id, eighths[2].id], 'off');
+        selection.select(eighths[0].id);
+
+        editing.resetBeams();
+
+        expect(flags().slice(0, 4)).toEqual(['-', '-', 'off', '-']);
+      });
+
+      it('adds no undo step when nothing was set by hand', () => {
+        selection.selectMany(eighths.map((el) => el.id));
+
+        editing.resetBeams();
+
+        expect(scoreModel.canUndo()).toBeFalse();
+      });
+    });
+  });
 });

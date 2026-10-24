@@ -32,6 +32,8 @@ export interface Note {
   /** Single augmentation dot: lengthens the note by half. */
   dotted?: boolean;
   tieToNext?: boolean;
+  /** Manual beaming with the next note: 'on' forces a beam, 'off' forbids one; unset = automatic. */
+  beamToNext?: 'on' | 'off';
 }
 
 export interface Rest {

@@ -126,6 +126,24 @@
       >
         ⌒
       </button>
+      <button
+        type="button"
+        class="duration-btn"
+        [class.active]="beamActive()"
+        [attr.aria-pressed]="beamActive()"
+        title="Spoji ili razdvoji note gredom (B)"
+        (click)="onToggleBeam()"
+      >
+        ♫
+      </button>
+      <button
+        type="button"
+        class="duration-btn"
+        title="Greda automatski (Shift+B)"
+        (click)="onResetBeams()"
+      >
+        ↺
+      </button>
     </div>
 
     <div class="staff-area">

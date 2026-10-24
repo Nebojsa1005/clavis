@@ -11,7 +11,10 @@ import {
   NotationRendererService,
   SCORE_ELEMENT_ID_ATTR,
   SCORE_STAFF_ID_ATTR,
+  STAFF_TEXT_HEIGHT,
+  StaffTextSlot,
 } from '../../core/services/notation-renderer.service';
+import { allStaves } from '../../core/models/score-document';
 import { CaretService } from '../../core/state/caret.service';
 import { NoteInputService } from '../../core/state/note-input.service';
 import { ScoreModelService } from '../../core/state/score-model.service';
@@ -38,6 +41,10 @@ export class StaffView {
   /** Rubber-band rectangle while dragging a selection, in px relative to the canvas. */
   protected readonly selectionBox = signal<{ left: number; width: number } | null>(null);
 
+  /** Text field under every staff, placed where the last render left room for it. */
+  protected readonly textFields = signal<(StaffTextSlot & { text: string })[]>([]);
+  protected readonly textFieldHeight = STAFF_TEXT_HEIGHT;
+
   private dragStartX: number | null = null;
   private dragging = false;
   private suppressNextClick = false;
@@ -54,7 +61,15 @@ export class StaffView {
         return;
       }
       this.notationRenderer.render(host, document, selectedIds, caret, activeStaffId);
+      const texts = new Map(allStaves(document).map((ref) => [ref.staff.id, ref.staff.text ?? '']));
+      this.textFields.set(
+        this.notationRenderer.getStaffTextSlots().map((slot) => ({ ...slot, text: texts.get(slot.staffId) ?? '' })),
+      );
     });
+  }
+
+  protected onTextInput(staffId: string, event: Event): void {
+    this.scoreModel.setStaffText(staffId, (event.target as HTMLTextAreaElement).value);
   }
 
   protected onCanvasMouseDown(event: MouseEvent): void {

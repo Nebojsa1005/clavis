@@ -362,3 +362,79 @@ describe('ExportService with several staves and instruments', () => {
     expect(svg.match(/class="vf-stave"/g)?.length).toBe(2);
   });
 });
+
+describe('ExportService beams', () => {
+  let service: ExportService;
+
+  beforeEach(() => {
+    service = TestBed.inject(ExportService);
+  });
+
+  const xmlFor = (...elements: ReturnType<typeof createNote>[]) => {
+    const score = createEmptyScore();
+    score.measures[0].elements.push(...elements);
+    return service.toMusicXml(score);
+  };
+  const beams = (xml: string) => Array.from(xml.matchAll(/<beam number="(\d)">([^<]+)<\/beam>/g)).map((m) => `${m[1]}:${m[2]}`);
+
+  it('marks the start and the end of a beamed pair', () => {
+    const xml = xmlFor(createNote('C', 4, 'eighth'), createNote('D', 4, 'eighth'));
+
+    expect(beams(xml)).toEqual(['1:begin', '1:end']);
+  });
+
+  it('marks the notes in the middle of a longer group as continuing', () => {
+    const xml = xmlFor(
+      createNote('C', 4, 'sixteenth'),
+      createNote('D', 4, 'sixteenth'),
+      createNote('E', 4, 'sixteenth'),
+      createNote('F', 4, 'sixteenth'),
+    );
+
+    expect(beams(xml)).toEqual(['1:begin', '2:begin', '1:continue', '2:continue', '1:continue', '2:continue', '1:end', '2:end']);
+  });
+
+  it('writes a hook for a sixteenth next to an eighth', () => {
+    const xml = xmlFor(createNote('C', 4, 'eighth'), createNote('D', 4, 'sixteenth'), createNote('E', 4, 'sixteenth'));
+
+    expect(beams(xml)).toEqual(['1:begin', '1:continue', '2:begin', '1:end', '2:end']);
+  });
+
+  it('draws a hook for a short note between longer ones', () => {
+    const xml = xmlFor(createNote('C', 4, 'eighth'), createNote('D', 4, 'sixteenth'), createNote('E', 4, 'eighth'));
+
+    expect(beams(xml)).toEqual(['1:begin', '1:continue', '2:backward hook', '1:end']);
+  });
+
+  it('writes no beams for single eighths, quarters or an unbeamed manual split', () => {
+    expect(beams(xmlFor(createNote('C', 4, 'eighth'), createNote('D', 4, 'quarter')))).toEqual([]);
+
+    const split = createNote('C', 4, 'eighth');
+    expect(beams(xmlFor({ ...split, beamToNext: 'off' }, createNote('D', 4, 'eighth')))).toEqual([]);
+  });
+
+  it('writes a beam across beats when it was joined by hand', () => {
+    const xml = xmlFor(
+      createNote('C', 4, 'eighth'),
+      { ...createNote('D', 4, 'eighth'), beamToNext: 'on' },
+      createNote('E', 4, 'eighth'),
+      createNote('F', 4, 'eighth'),
+    );
+
+    expect(beams(xml)).toEqual(['1:begin', '1:continue', '1:continue', '1:end']);
+  });
+
+  it('puts <beam> after <staff> and before <notations> in a grand staff note', () => {
+    const treble = createEmptyScore('treble');
+    treble.measures[0].elements.push(
+      { ...createNote('C', 4, 'eighth'), tieToNext: true },
+      createNote('C', 4, 'eighth'),
+    );
+    const xml = service.toMusicXml({ parts: [createPart('Klavir', [treble, createEmptyScore('bass')])] });
+
+    const note = xml.slice(xml.indexOf('<note>'), xml.indexOf('</note>'));
+    expect(note.indexOf('<staff>1</staff>')).toBeGreaterThan(-1);
+    expect(note.indexOf('<beam number="1">begin</beam>')).toBeGreaterThan(note.indexOf('<staff>1</staff>'));
+    expect(note.indexOf('<notations>')).toBeGreaterThan(note.indexOf('<beam number="1">begin</beam>'));
+  });
+});

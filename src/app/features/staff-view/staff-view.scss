@@ -16,6 +16,30 @@
   }
 }
 
+.staff-text {
+  position: absolute;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 4px 6px;
+  border: 1px dashed transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: 14px/1.4 ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  white-space: pre;
+  resize: none;
+
+  &:hover {
+    border-color: var(--color-border);
+  }
+
+  &:focus {
+    outline: none;
+    border-style: solid;
+    border-color: var(--color-accent);
+  }
+}
+
 .selection-box {
   position: absolute;
   top: 0;

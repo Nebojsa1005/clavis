@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import {
   Accidental,
+  Beam,
   Dot,
   Formatter,
   Renderer,
@@ -10,6 +11,7 @@ import {
   StaveTie,
   Voice,
 } from 'vexflow';
+import { beamGroups } from '../models/beam.util';
 import { CaretPosition, elementBoundaries } from '../models/caret.util';
 import { Measure, MeasureElement, NoteDuration, Score } from '../models/score.model';
 import { allStaves, asDocument, documentMeasureCount, ScoreDocument, StaffRef } from '../models/score-document';
@@ -38,9 +40,9 @@ const MIN_CANVAS_HEIGHT = 200;
 /** Distance between the tops of two staves of one instrument (a grand staff) and of different instruments. */
 const STAFF_GAP_SAME_PART = 100;
 const STAFF_GAP_BETWEEN_PARTS = 130;
-/** Room kept below the last staff for low notes and ledger lines. */
-const CANVAS_BOTTOM_PADDING = 80;
-const STAVE_HEIGHT_TO_BOTTOM_LINE = 80;
+/** Text field under every staff: its distance from the bottom staff line (room for ledger lines) and its height. */
+const STAFF_TEXT_OFFSET_Y = 34;
+export const STAFF_TEXT_HEIGHT = 30;
 
 /** Mora pratiti vrednost --color-accent iz styles.scss (VexFlow ne čita CSS custom properties). */
 const SELECTED_NOTE_COLOR = '#3b5bfd';
@@ -57,6 +59,14 @@ const CARET_GAP_BEFORE_ACCIDENTAL = 18;
 const CARET_GAP_AFTER_LAST_NOTE = 24;
 /** How far the caret line extends above and below the staff lines. */
 const CARET_OVERSHOOT_Y = 14;
+
+/** Where the text field of a staff goes, in SVG px relative to the rendered score. */
+export interface StaffTextSlot {
+  staffId: string;
+  top: number;
+  left: number;
+  width: number;
+}
 
 export interface StaffGeometry {
   topLineY: number;
@@ -89,6 +99,7 @@ export class NotationRendererService {
   private layouts = new Map<string, MeasureLayout[]>();
   /** Y of the top line of every staff, in staff order, from the last render. */
   private staffTops: { id: string; topLineY: number }[] = [];
+  private textSlots: StaffTextSlot[] = [];
   /** Staff that position queries refer to when the caller does not name one. */
   private queryStaffId: string | null = null;
 
@@ -97,6 +108,11 @@ export class NotationRendererService {
     const known = this.staffTops.find((staff) => staff.id === staffId);
     const base = this.defaultStaffGeometry();
     return known ? { ...base, topLineY: known.topLineY } : base;
+  }
+
+  /** Text field position of every staff, in staff order, from the last render. */
+  getStaffTextSlots(): StaffTextSlot[] {
+    return this.textSlots;
   }
 
   /** Id of the staff nearest to a y coordinate (SVG px), or null before anything was rendered. */
@@ -169,7 +185,15 @@ export class NotationRendererService {
     this.staffTops = refs.map((ref, index) => ({ id: ref.staff.id, topLineY: staffYs[index] + (geometry.topLineY - STAVE_Y) }));
 
     const totalWidth = STAVE_MARGIN_X * 2 + STAVE_WIDTH * columns;
-    const height = Math.max(MIN_CANVAS_HEIGHT, staffYs[staffYs.length - 1] + STAVE_HEIGHT_TO_BOTTOM_LINE + CANVAS_BOTTOM_PADDING);
+    const bottomLineOffset = geometry.halfStepPx * 8;
+    this.textSlots = this.staffTops.map((staff) => ({
+      staffId: staff.id,
+      top: staff.topLineY + bottomLineOffset + STAFF_TEXT_OFFSET_Y,
+      left: STAVE_MARGIN_X,
+      width: STAVE_WIDTH * columns,
+    }));
+    const lastTextBottom = this.textSlots[this.textSlots.length - 1].top + STAFF_TEXT_HEIGHT;
+    const height = Math.max(MIN_CANVAS_HEIGHT, lastTextBottom + STAFF_TEXT_OFFSET_Y);
     const renderer = new Renderer(container, Renderer.Backends.SVG);
     renderer.resize(Math.max(totalWidth, container.clientWidth || totalWidth), height);
     const context = renderer.getContext();
@@ -215,14 +239,18 @@ export class NotationRendererService {
     return this.defaultGeometry;
   }
 
-  /** The y VexFlow gets for each staff: staves of one instrument sit closer than separate instruments. */
+  /**
+   * The y VexFlow gets for each staff: staves of one instrument sit closer than separate instruments,
+   * and every staff keeps room below it for its text field.
+   */
   private staffYs(refs: StaffRef[]): number[] {
     const ys: number[] = [];
     refs.forEach((ref, index) => {
       if (index === 0) {
         ys.push(STAVE_Y);
       } else {
-        ys.push(ys[index - 1] + (ref.staffIndex > 0 ? STAFF_GAP_SAME_PART : STAFF_GAP_BETWEEN_PARTS));
+        const gap = ref.staffIndex > 0 ? STAFF_GAP_SAME_PART : STAFF_GAP_BETWEEN_PARTS;
+        ys.push(ys[index - 1] + gap + STAFF_TEXT_OFFSET_Y + STAFF_TEXT_HEIGHT);
       }
     });
     return ys;
@@ -283,6 +311,19 @@ export class NotationRendererService {
       return { ref, stave: staves[index], notes, measure };
     });
 
+    // Beams have to exist before the notes are formatted and drawn: they take over the flags and
+    // decide the stem direction of the whole group.
+    const beams = columnStaves.flatMap((entry) => {
+      const noteById = new Map(entry.measure.elements.map((el, index) => [el.id, entry.notes[index]]));
+      return beamGroups(entry.measure, entry.ref.staff.score.timeSignature).map((group) => {
+        const beam = new Beam(group.map((note) => noteById.get(note.id)!), true);
+        if (group.every((note) => selectedIds.has(note.id))) {
+          beam.setStyle({ fillStyle: SELECTED_NOTE_COLOR, strokeStyle: SELECTED_NOTE_COLOR });
+        }
+        return beam;
+      });
+    });
+
     const formatter = new Formatter();
     const voices = columnStaves
       .filter((entry) => entry.notes.length > 0)
@@ -298,6 +339,7 @@ export class NotationRendererService {
       formatter.format(voices.map((item) => item.voice), STAVE_WIDTH - 50);
     }
     voices.forEach(({ entry, voice }) => voice.draw(context, entry.stave));
+    beams.forEach((beam) => beam.setContext(context).draw());
 
     for (const entry of columnStaves) {
       this.recordLayout(entry, x);
@@ -379,7 +421,8 @@ export class NotationRendererService {
     }
 
     const key = `${element.pitch.step.toLowerCase()}/${element.pitch.octave}`;
-    const note = new StaveNote({ keys: [key], duration, clef });
+    // autoStem: stem up for notes below the middle line, down for the middle line and above.
+    const note = new StaveNote({ keys: [key], duration, clef, autoStem: true });
     if (element.pitch.accidental) {
       note.addModifier(new Accidental(VEXFLOW_ACCIDENTAL[element.pitch.accidental]));
     }

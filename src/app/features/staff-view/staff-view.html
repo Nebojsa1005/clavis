@@ -6,6 +6,21 @@
     (click)="onCanvasClick($event)"
     (mousedown)="onCanvasMouseDown($event)"
   ></div>
+  @for (field of textFields(); track field.staffId) {
+    <textarea
+      class="staff-text"
+      wrap="off"
+      spellcheck="false"
+      aria-label="Tekst ispod linijskog sistema"
+      placeholder="Tekst…"
+      [style.top.px]="field.top"
+      [style.left.px]="field.left"
+      [style.width.px]="field.width"
+      [style.height.px]="textFieldHeight"
+      [value]="field.text"
+      (input)="onTextInput(field.staffId, $event)"
+    ></textarea>
+  }
   @if (selectionBox(); as box) {
     <div class="selection-box" [style.left.px]="box.left" [style.width.px]="box.width"></div>
   }

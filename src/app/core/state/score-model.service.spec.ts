@@ -875,4 +875,135 @@ describe('ScoreModelService', () => {
       });
     });
   });
+
+  describe('beams', () => {
+    const eighthsInOneMeasure = (count: number) => {
+      service.replaceScore(createEmptyScore());
+      for (let i = 0; i < count; i++) {
+        service.appendElement(createNote('C', 4, 'eighth'));
+      }
+      return service.score().measures[0].elements.map((el) => el.id);
+    };
+    const flags = () =>
+      service.score().measures.flatMap((m) => m.elements.map((el) => (el.kind === 'note' ? (el.beamToNext ?? '-') : 'r')));
+
+    it('sets a manual mode and clears it again', () => {
+      const ids = eighthsInOneMeasure(4);
+
+      service.setBeams([ids[1]], 'on');
+      expect(flags()).toEqual(['-', 'on', '-', '-']);
+
+      service.setBeams([ids[1]], null);
+      expect(flags()).toEqual(['-', '-', '-', '-']);
+    });
+
+    it('is one undo step', () => {
+      const ids = eighthsInOneMeasure(4);
+
+      service.setBeams([ids[0], ids[1], ids[2]], 'off');
+      service.undo();
+
+      expect(flags()).toEqual(['-', '-', '-', '-']);
+    });
+
+    it('is dropped when a quarter is inserted after the flagged note', () => {
+      const ids = eighthsInOneMeasure(2);
+      service.setBeams([ids[0]], 'on');
+
+      service.insertElement(0, 1, createNote('D', 4, 'quarter'));
+
+      expect(flags()).toEqual(['-', '-', '-']);
+    });
+
+    it('survives an insert that keeps the pair together', () => {
+      const ids = eighthsInOneMeasure(2);
+      service.setBeams([ids[0]], 'on');
+
+      service.insertElement(0, 0, createNote('D', 4, 'quarter'));
+
+      expect(flags()).toEqual(['-', 'on', '-']);
+    });
+
+    it('is dropped when the next note is deleted and the one after it cannot be beamed', () => {
+      service.replaceScore(createEmptyScore());
+      service.appendElement(createNote('C', 4, 'eighth'));
+      service.appendElement(createNote('D', 4, 'eighth'));
+      service.appendElement(createNote('E', 4, 'quarter'));
+      const [first, second] = service.score().measures[0].elements;
+      service.setBeams([first.id], 'on');
+
+      service.deleteElement(second.id);
+
+      expect(flags()).toEqual(['-', '-']);
+    });
+
+    it('keeps the setting of a copied and pasted pair', () => {
+      const ids = eighthsInOneMeasure(2);
+      service.setBeams([ids[0]], 'off');
+      const pair = service.score().measures[0].elements.map((el) => ({ ...el, id: crypto.randomUUID() }));
+
+      service.insertElements(0, 2, pair);
+
+      expect(flags()).toEqual(['off', '-', 'off', '-']);
+    });
+  });
+
+  describe('staff text', () => {
+    const staffIds = () => allStaves(service.document()).map((ref) => ref.staff.id);
+    const textOf = (staffId: string) => findStaff(service.document(), staffId)?.text;
+
+    beforeEach(() => {
+      service.replaceDocument({ parts: [createPart('Klavir', [createEmptyScore(), createEmptyScore('bass')])] });
+    });
+
+    it('sets the text of one staff only', () => {
+      const [top, bottom] = staffIds();
+      service.setStaffText(bottom, 'Ky - ri - e');
+
+      expect(textOf(bottom)).toBe('Ky - ri - e');
+      expect(textOf(top)).toBeUndefined();
+    });
+
+    it('joins consecutive typing on one staff into a single undo step', () => {
+      const [top] = staffIds();
+      service.setStaffText(top, 'a');
+      service.setStaffText(top, 'ab');
+      service.setStaffText(top, 'abc');
+      service.undo();
+
+      expect(textOf(top)).toBeUndefined();
+      expect(service.canUndo()).toBeFalse();
+      service.redo();
+      expect(textOf(top)).toBe('abc');
+    });
+
+    it('starts a new undo step after another edit or on another staff', () => {
+      const [top, bottom] = staffIds();
+      service.setStaffText(top, 'a');
+      service.appendElement(createNote('C', 4, 'quarter'));
+      service.setStaffText(top, 'ab');
+      service.setStaffText(bottom, 'x');
+
+      service.undo();
+      expect(textOf(bottom)).toBeUndefined();
+      expect(textOf(top)).toBe('ab');
+      service.undo();
+      expect(textOf(top)).toBe('a');
+    });
+
+    it('ignores unknown staves and unchanged text', () => {
+      service.setStaffText('nope', 'x');
+      service.setStaffText(staffIds()[0], '');
+
+      expect(service.canUndo()).toBeFalse();
+    });
+
+    it('keeps the text through other edits of the staff', () => {
+      const [top] = staffIds();
+      service.setStaffText(top, 'tekst');
+      service.appendElement(createNote('C', 4, 'quarter'));
+
+      expect(textOf(top)).toBe('tekst');
+    });
+  });
 });

@@ -1,6 +1,17 @@
 import { TestBed } from '@angular/core/testing';
 import { KEY_SIGNATURE_OPTIONS } from '../models/key-signature.util';
-import { CLEFS, createEmptyScore, createMeasure, createNote, createRest } from '../models/score.model';
+import {
+  Clef,
+  CLEFS,
+  createEmptyScore,
+  createMeasure,
+  createNote,
+  createRest,
+  MeasureElement,
+  NoteDuration,
+  Score,
+  Step,
+} from '../models/score.model';
 import { createPart } from '../models/score-document';
 import { NotationRendererService, CARET_CLASS, SCORE_ELEMENT_ID_ATTR, SCORE_STAFF_ID_ATTR } from './notation-renderer.service';
 
@@ -438,6 +449,219 @@ describe('NotationRendererService', () => {
 
       const node = container.querySelector(`[${SCORE_ELEMENT_ID_ATTR}="${bassNote.id}"]`) as SVGElement;
       expect(node.getAttribute('fill')).toBe('#3b5bfd');
+    });
+  });
+
+  describe('stem direction', () => {
+    type Direction = 'up' | 'down' | 'none';
+
+    /** A stem that reaches above its note head points up, one that reaches below points down. */
+    function stemOf(step: Step, octave: number, clef: Clef, duration: NoteDuration = 'quarter'): Direction {
+      const score = createEmptyScore(clef);
+      score.measures[0].elements.push(createNote(step, octave, duration));
+      service.render(container, score);
+
+      const stem = container.querySelector('.vf-stem');
+      const head = container.querySelector('.vf-notehead');
+      if (!stem || !head) {
+        return 'none';
+      }
+      const stemBox = stem.getBoundingClientRect();
+      const headBox = head.getBoundingClientRect();
+      return stemBox.top + stemBox.bottom < headBox.top + headBox.bottom ? 'up' : 'down';
+    }
+
+    it('points up below the middle line and down from the middle line up (treble clef)', () => {
+      expect(stemOf('C', 4, 'treble')).toBe('up');
+      expect(stemOf('E', 4, 'treble')).toBe('up');
+      expect(stemOf('G', 4, 'treble')).toBe('up');
+      // the text book rule: up to A4 (second space), down from B4 (the third line)
+      expect(stemOf('A', 4, 'treble')).toBe('up');
+      expect(stemOf('B', 4, 'treble')).toBe('down');
+      expect(stemOf('C', 5, 'treble')).toBe('down');
+      expect(stemOf('F', 5, 'treble')).toBe('down');
+      expect(stemOf('C', 6, 'treble')).toBe('down');
+    });
+
+    it('uses the middle line of the bass clef (D3)', () => {
+      expect(stemOf('B', 2, 'bass')).toBe('up');
+      expect(stemOf('C', 3, 'bass')).toBe('up');
+      expect(stemOf('D', 3, 'bass')).toBe('down');
+      expect(stemOf('E', 3, 'bass')).toBe('down');
+      expect(stemOf('A', 3, 'bass')).toBe('down');
+    });
+
+    it('uses the middle line of the alto clef (C4)', () => {
+      expect(stemOf('B', 3, 'alto')).toBe('up');
+      expect(stemOf('C', 4, 'alto')).toBe('down');
+      expect(stemOf('D', 4, 'alto')).toBe('down');
+    });
+
+    it('uses the middle line of the tenor clef (A3)', () => {
+      expect(stemOf('G', 3, 'tenor')).toBe('up');
+      expect(stemOf('A', 3, 'tenor')).toBe('down');
+      expect(stemOf('B', 3, 'tenor')).toBe('down');
+    });
+
+    it('follows the same rule for shorter notes, which also carry a flag', () => {
+      expect(stemOf('C', 4, 'treble', 'eighth')).toBe('up');
+      expect(stemOf('C', 6, 'treble', 'eighth')).toBe('down');
+      expect(stemOf('G', 4, 'treble', 'sixteenth')).toBe('up');
+      expect(stemOf('G', 5, 'treble', 'sixtyfourth')).toBe('down');
+      expect(stemOf('C', 4, 'treble', 'half')).toBe('up');
+      expect(stemOf('C', 6, 'treble', 'half')).toBe('down');
+    });
+
+    it('draws no stem for a whole note', () => {
+      expect(stemOf('C', 4, 'treble', 'whole')).toBe('none');
+      expect(stemOf('C', 6, 'treble', 'whole')).toBe('none');
+    });
+
+    it('changes direction when the clef changes, since the middle line moves', () => {
+      // C4 sits far below the treble middle line but exactly on the alto one
+      expect(stemOf('C', 4, 'treble')).toBe('up');
+      expect(stemOf('C', 4, 'alto')).toBe('down');
+    });
+
+    it('gives each staff of a grand staff stems by its own clef', () => {
+      const treble = createEmptyScore('treble');
+      treble.measures[0].elements.push(createNote('C', 6, 'quarter'), createNote('C', 4, 'quarter'));
+      const bass = createEmptyScore('bass');
+      bass.measures[0].elements.push(createNote('E', 3, 'quarter'), createNote('C', 3, 'quarter'));
+
+      service.render(container, { parts: [createPart('Klavir', [treble, bass])] });
+
+      const directions = Array.from(container.querySelectorAll('.vf-stavenote')).map((note) => {
+        const stem = note.querySelector('.vf-stem')!.getBoundingClientRect();
+        const head = note.querySelector('.vf-notehead')!.getBoundingClientRect();
+        return stem.top + stem.bottom < head.top + head.bottom ? 'up' : 'down';
+      });
+      expect(directions).toEqual(['down', 'up', 'down', 'up']);
+    });
+
+    it('puts the stem on the right of the head when it points up and on the left when it points down', () => {
+      const score = createEmptyScore();
+      score.measures[0].elements.push(createNote('C', 4, 'quarter'), createNote('C', 6, 'quarter'));
+
+      service.render(container, score);
+
+      const [low, high] = Array.from(container.querySelectorAll('.vf-stavenote'));
+      const sideOf = (note: Element) => {
+        const stem = note.querySelector('.vf-stem')!.getBoundingClientRect();
+        const head = note.querySelector('.vf-notehead')!.getBoundingClientRect();
+        return stem.left + stem.right > head.left + head.right ? 'right' : 'left';
+      };
+      expect(sideOf(low)).toBe('right');
+      expect(sideOf(high)).toBe('left');
+    });
+  });
+
+  describe('beams', () => {
+    const counts = (score: Score) => {
+      service.render(container, score);
+      return {
+        beams: container.querySelectorAll('.vf-beam').length,
+        flags: container.querySelectorAll('.vf-flag').length,
+      };
+    };
+    const withElements = (...elements: MeasureElement[]): Score => ({
+      ...createEmptyScore(),
+      measures: [createMeasure(elements)],
+    });
+    const eighth = (step: Step = 'C', beamToNext?: 'on' | 'off') => ({
+      ...createNote(step, 4, 'eighth'),
+      ...(beamToNext ? { beamToNext } : {}),
+    });
+
+    it('draws one beam per beat for eighths, and no flags on beamed notes', () => {
+      expect(counts(withElements(eighth(), eighth(), eighth(), eighth()))).toEqual({ beams: 2, flags: 0 });
+    });
+
+    it('keeps the flag on an eighth that has nobody to be beamed with', () => {
+      expect(counts(withElements(eighth(), eighth(), eighth()))).toEqual({ beams: 1, flags: 1 });
+      expect(counts(withElements(eighth(), createRest('eighth')))).toEqual({ beams: 0, flags: 1 });
+    });
+
+    it('draws a single beam for a run of sixteenths', () => {
+      const sixteenths = Array.from({ length: 4 }, () => createNote('C', 4, 'sixteenth'));
+
+      expect(counts(withElements(...sixteenths)).beams).toBe(1);
+    });
+
+    it('does not beam quarters and longer notes', () => {
+      expect(counts(withElements(createNote('C', 4, 'quarter'), createNote('D', 4, 'half')))).toEqual({ beams: 0, flags: 0 });
+    });
+
+    it('does not beam across a rest', () => {
+      expect(counts(withElements(eighth(), createRest('eighth'), eighth(), createRest('eighth')))).toEqual({ beams: 0, flags: 2 });
+    });
+
+    it('follows a manual "off": the flags come back', () => {
+      expect(counts(withElements(eighth('C', 'off'), eighth(), eighth(), eighth()))).toEqual({ beams: 1, flags: 2 });
+    });
+
+    it('follows a manual "on": notes in different beats share a beam', () => {
+      expect(counts(withElements(eighth('C'), eighth('D', 'on'), eighth('E'), eighth('F')))).toEqual({ beams: 1, flags: 0 });
+    });
+
+    it('uses beats of three eighths in 6/8', () => {
+      const score = { ...withElements(...Array.from({ length: 6 }, () => eighth())), timeSignature: { numerator: 6, denominator: 8 } };
+
+      expect(counts(score)).toEqual({ beams: 2, flags: 0 });
+    });
+
+    it('beams within each measure and never across the barline', () => {
+      const score = {
+        ...createEmptyScore(),
+        measures: [
+          createMeasure([createNote('C', 4, 'half'), createNote('D', 4, 'quarter'), eighth()]),
+          createMeasure([eighth(), createNote('E', 4, 'quarter')]),
+        ],
+      };
+
+      expect(counts(score)).toEqual({ beams: 0, flags: 2 });
+    });
+
+    it('gives all notes of a beam the same stem direction', () => {
+      const score = withElements(
+        { ...createNote('C', 4, 'eighth') },
+        { ...createNote('A', 5, 'eighth') },
+      );
+      service.render(container, score);
+
+      // with a beam the stems are drawn next to the notes, not inside them, so pair them by order
+      const stems = Array.from(container.querySelectorAll('.vf-stem'));
+      const heads = Array.from(container.querySelectorAll('.vf-notehead'));
+      const directions = stems.map((stemEl, index) => {
+        const stem = stemEl.getBoundingClientRect();
+        const head = heads[index].getBoundingClientRect();
+        return stem.top + stem.bottom < head.top + head.bottom ? 'up' : 'down';
+      });
+
+      expect(stems.length).toBe(2);
+      expect(container.querySelectorAll('.vf-beam').length).toBe(1);
+      expect(new Set(directions).size).toBe(1);
+    });
+
+    it('beams every staff of a grand staff on its own', () => {
+      const treble = withElements(eighth(), eighth());
+      const bass = { ...createEmptyScore('bass'), measures: [createMeasure([eighth(), eighth(), eighth(), eighth()])] };
+
+      service.render(container, { parts: [createPart('Klavir', [treble, bass])] });
+
+      expect(container.querySelectorAll('.vf-beam').length).toBe(3);
+    });
+
+    it('colors a beam whose notes are all selected', () => {
+      const [a, b, c, d] = [eighth(), eighth(), eighth(), eighth()];
+      const score = withElements(a, b, c, d);
+
+      service.render(container, score, new Set([a.id, b.id]));
+
+      const beams = Array.from(container.querySelectorAll('.vf-beam'));
+      const colored = beams.filter((beam) => beam.querySelector('[fill="#3b5bfd"]') || beam.getAttribute('fill') === '#3b5bfd');
+      expect(beams.length).toBe(2);
+      expect(colored.length).toBe(1);
     });
   });
 });

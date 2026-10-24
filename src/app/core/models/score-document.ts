@@ -1,4 +1,5 @@
 import { createId, createMeasure, isScore, Score } from './score.model';
+import { sanitizeBeams } from './beam.util';
 import { sanitizeTies } from './tie.util';
 
 /**
@@ -9,6 +10,8 @@ import { sanitizeTies } from './tie.util';
 export interface Staff {
   readonly id: string;
   score: Score;
+  /** Free text written under the staff (lyrics, remarks, ...); unset = empty. */
+  text?: string;
 }
 
 export interface Part {
@@ -64,7 +67,11 @@ export function isScoreDocument(value: unknown): value is ScoreDocument {
         staves.length > 0 &&
         staves.every((staff: unknown) => {
           const entry = staff as Record<string, unknown> | null;
-          return typeof entry?.['id'] === 'string' && isScore(entry['score']);
+          return (
+            typeof entry?.['id'] === 'string' &&
+            isScore(entry['score']) &&
+            (entry['text'] === undefined || typeof entry['text'] === 'string')
+          );
         })
       );
     })
@@ -139,7 +146,7 @@ export function normalizeDocument(doc: ScoreDocument): ScoreDocument {
 
   let changed = false;
   const next = mapStaffScores(doc, (score) => {
-    let result = sanitizeTies(score);
+    let result = sanitizeBeams(sanitizeTies(score));
     const sameSignatures =
       result.timeSignature.numerator === reference.timeSignature.numerator &&
       result.timeSignature.denominator === reference.timeSignature.denominator &&

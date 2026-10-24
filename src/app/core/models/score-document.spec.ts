@@ -69,6 +69,14 @@ describe('score document', () => {
       expect(isScoreDocument({ parts: [{ id: 'p', staves: [{ id: 's', score: createEmptyScore() }] }] })).toBeFalse();
     });
 
+    it('accepts staff text and rejects text that is not a string', () => {
+      const withText = (text: unknown) => ({ parts: [{ id: 'p', name: 'X', staves: [{ id: 's', score: createEmptyScore(), text }] }] });
+
+      expect(isScoreDocument(withText('la la'))).toBeTrue();
+      expect(isScoreDocument(withText(undefined))).toBeTrue();
+      expect(isScoreDocument(withText(42))).toBeFalse();
+    });
+
     it('toDocument returns documents, upgrades old single-staff scores and rejects the rest', () => {
       const doc = valid();
       const legacy = createEmptyScore('bass');

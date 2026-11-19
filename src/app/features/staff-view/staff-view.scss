@@ -1,5 +1,34 @@
+/* As wide as the drawn score, so clicks on empty staff past the visible width still reach the canvas. */
 .staff-wrap {
   position: relative;
+  width: max-content;
+  min-width: 100%;
+}
+
+/* Preview of the note head a click would enter, centred on (left, top). */
+.note-ghost {
+  position: absolute;
+  width: 13px;
+  height: 9px;
+  margin: -4.5px 0 0 -6.5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  transform: rotate(-20deg);
+  pointer-events: none;
+}
+
+.note-ghost__label {
+  position: absolute;
+  left: 16px;
+  top: -16px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 10px;
+  line-height: 14px;
+  transform: rotate(20deg);
+  white-space: nowrap;
 }
 
 .staff-canvas {

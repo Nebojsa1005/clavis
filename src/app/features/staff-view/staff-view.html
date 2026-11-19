@@ -1,11 +1,18 @@
-<div class="staff-wrap">
+<div class="staff-wrap" [style.zoom]="viewZoom.zoom()">
   <div
     class="staff-canvas"
     [class.input-active]="noteInput.active()"
     #canvasHost
     (click)="onCanvasClick($event)"
     (mousedown)="onCanvasMouseDown($event)"
+    (mousemove)="onCanvasMouseMove($event)"
+    (mouseleave)="onCanvasMouseLeave()"
   ></div>
+  @if (ghost(); as preview) {
+    <div class="note-ghost" [style.left.px]="preview.x" [style.top.px]="preview.y">
+      <span class="note-ghost__label">{{ preview.label }}</span>
+    </div>
+  }
   @for (field of textFields(); track field.staffId) {
     <textarea
       class="staff-text"

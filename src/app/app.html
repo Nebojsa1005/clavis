@@ -56,6 +56,12 @@
       <app-key-signature-control />
     </div>
 
+    <div class="toolbar__group" aria-label="Zum">
+      <button type="button" [disabled]="!viewZoom.canZoomOut()" (click)="viewZoom.zoomOut()" title="Umanji (pinch ili Ctrl + točkić)">−</button>
+      <button type="button" class="zoom-value" (click)="viewZoom.reset()" title="Vrati na 100%">{{ viewZoom.percent() }}%</button>
+      <button type="button" [disabled]="!viewZoom.canZoomIn()" (click)="viewZoom.zoomIn()" title="Uvećaj (pinch ili Ctrl + točkić)">+</button>
+    </div>
+
     <div class="toolbar__group" aria-label="Izmene">
       <button type="button" [disabled]="!scoreModel.canUndo()" (click)="onUndo()" title="Undo (Ctrl+Z)">Undo</button>
       <button type="button" [disabled]="!scoreModel.canRedo()" (click)="onRedo()" title="Redo (Ctrl+Shift+Z)">

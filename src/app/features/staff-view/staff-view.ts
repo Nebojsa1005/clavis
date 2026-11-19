@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  HostListener,
   effect,
   inject,
   signal,
@@ -14,14 +15,39 @@ import {
   STAFF_TEXT_HEIGHT,
   StaffTextSlot,
 } from '../../core/services/notation-renderer.service';
-import { allStaves } from '../../core/models/score-document';
+import { allStaves, findStaff } from '../../core/models/score-document';
+import { pitchFromClickY } from '../../core/models/notation.util';
 import { CaretService } from '../../core/state/caret.service';
 import { NoteInputService } from '../../core/state/note-input.service';
 import { ScoreModelService } from '../../core/state/score-model.service';
 import { SelectionService } from '../../core/state/selection.service';
+import { ViewZoomService } from '../../core/state/view-zoom.service';
 
 /** Pointer travel (px) before a press on the staff turns into a drag selection instead of a click. */
 const DRAG_THRESHOLD_PX = 4;
+
+/** How strongly a pinch (or Ctrl + wheel) zooms per pixel of wheel travel. */
+const WHEEL_ZOOM_SPEED = 0.01;
+/** The preview note head sits this far right of the caret line, where the inserted note will be. */
+const GHOST_OFFSET_X = 14;
+
+/** Where the next click would put a note: the spot on the staff and the pitch it stands for. */
+export interface NoteGhost {
+  x: number;
+  y: number;
+  label: string;
+}
+
+/** The nearest ancestor that scrolls, which is what has to move to keep the pointer still while zooming. */
+function scrollParent(element: HTMLElement): HTMLElement | null {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    const { overflowX, overflowY } = getComputedStyle(node);
+    if (/(auto|scroll)/.test(overflowX + overflowY)) {
+      return node;
+    }
+  }
+  return null;
+}
 
 @Component({
   selector: 'app-staff-view',
@@ -33,8 +59,10 @@ export class StaffView {
   private readonly scoreModel = inject(ScoreModelService);
   private readonly notationRenderer = inject(NotationRendererService);
   private readonly caretService = inject(CaretService);
+  private readonly hostElement = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly noteInput = inject(NoteInputService);
   protected readonly selection = inject(SelectionService);
+  protected readonly viewZoom = inject(ViewZoomService);
 
   protected readonly canvasHost = viewChild<ElementRef<HTMLDivElement>>('canvasHost');
 
@@ -44,6 +72,9 @@ export class StaffView {
   /** Text field under every staff, placed where the last render left room for it. */
   protected readonly textFields = signal<(StaffTextSlot & { text: string })[]>([]);
   protected readonly textFieldHeight = STAFF_TEXT_HEIGHT;
+
+  /** Preview of the note a click would enter, while the pointer is over the staff in note input. */
+  protected readonly ghost = signal<NoteGhost | null>(null);
 
   private dragStartX: number | null = null;
   private dragging = false;
@@ -66,6 +97,68 @@ export class StaffView {
         this.notationRenderer.getStaffTextSlots().map((slot) => ({ ...slot, text: texts.get(slot.staffId) ?? '' })),
       );
     });
+  }
+
+  /**
+   * A touchpad pinch reaches the page as a wheel event with Ctrl held (so does Ctrl + mouse wheel).
+   * It zooms the score instead of the whole page, keeping the spot under the pointer in place.
+   */
+  @HostListener('wheel', ['$event'])
+  protected onWheel(event: WheelEvent): void {
+    if (!event.ctrlKey) {
+      return;
+    }
+    event.preventDefault();
+    this.zoomAround(this.viewZoom.zoom() * Math.exp(-event.deltaY * WHEEL_ZOOM_SPEED), event);
+  }
+
+  /** Sets the zoom and scrolls so the score point under the pointer stays under it. */
+  private zoomAround(target: number, pointer: { clientX: number; clientY: number }): void {
+    const host = this.canvasHost()?.nativeElement;
+    const wrap = host?.parentElement;
+    const scroller = scrollParent(this.hostElement.nativeElement);
+    const previous = this.viewZoom.zoom();
+    if (!host || !wrap || !scroller) {
+      this.viewZoom.set(target);
+      return;
+    }
+
+    const rect = host.getBoundingClientRect();
+    const scoreX = (pointer.clientX - rect.left) / previous;
+    const scoreY = (pointer.clientY - rect.top) / previous;
+    const next = this.viewZoom.set(target);
+    if (next === previous) {
+      return;
+    }
+    // Apply the zoom right away (not on the next change detection) so the new layout can be measured.
+    wrap.style.zoom = String(next);
+    const after = host.getBoundingClientRect();
+    scroller.scrollLeft += after.left + scoreX * next - pointer.clientX;
+    scroller.scrollTop += after.top + scoreY * next - pointer.clientY;
+  }
+
+  protected onCanvasMouseMove(event: MouseEvent): void {
+    if (!this.noteInput.active() || this.dragStartX !== null) {
+      this.ghost.set(null);
+      return;
+    }
+    const { x, y } = this.pointInScore(event);
+    const staffId = this.notationRenderer.staffIdAtY(y);
+    const staff = staffId ? findStaff(this.scoreModel.document(), staffId) : undefined;
+    const position = staffId ? this.notationRenderer.caretFromX(x, staffId) : null;
+    const caretX = position && staffId ? this.notationRenderer.getCaretX(position, staffId) : null;
+    if (!staff || !staffId || caretX === null) {
+      this.ghost.set(null);
+      return;
+    }
+    const { topLineY, halfStepPx } = this.notationRenderer.getStaffGeometry(staffId);
+    const steps = Math.round((y - topLineY) / halfStepPx);
+    const pitch = pitchFromClickY(staff.score.clef, y, topLineY, halfStepPx);
+    this.ghost.set({ x: caretX + GHOST_OFFSET_X, y: topLineY + steps * halfStepPx, label: `${pitch.step}${pitch.octave}` });
+  }
+
+  protected onCanvasMouseLeave(): void {
+    this.ghost.set(null);
   }
 
   protected onTextInput(staffId: string, event: Event): void {
@@ -110,15 +203,14 @@ export class StaffView {
       return;
     }
 
-    const host = this.canvasHost()?.nativeElement;
-    if (!host) {
+    if (!this.canvasHost()) {
       return;
     }
-    const rect = host.getBoundingClientRect();
+    const { x, y } = this.pointInScore(event);
     // A click on empty space belongs to the staff nearest to it, which becomes the active one.
-    this.activateStaff(this.notationRenderer.staffIdAtY(event.clientY - rect.top));
+    this.activateStaff(this.notationRenderer.staffIdAtY(y));
     const activeStaffId = this.scoreModel.activeStaffId();
-    const position = this.notationRenderer.caretFromX(event.clientX - rect.left, activeStaffId);
+    const position = this.notationRenderer.caretFromX(x, activeStaffId);
 
     if (!this.noteInput.active()) {
       // Outside note input a click on empty staff selects the whole measure under the pointer.
@@ -131,9 +223,15 @@ export class StaffView {
     if (position) {
       this.caretService.setPosition(position);
     }
-    const y = event.clientY - rect.top;
     const geometry = this.notationRenderer.getStaffGeometry(activeStaffId);
     this.noteInput.enterPitchFromClick(this.scoreModel.score().clef, y, geometry.topLineY, geometry.halfStepPx);
+  }
+
+  /** Pointer position in the coordinates of the rendered score, whatever the zoom. */
+  private pointInScore(event: MouseEvent): { x: number; y: number } {
+    const rect = this.canvasHost()!.nativeElement.getBoundingClientRect();
+    const zoom = this.viewZoom.zoom();
+    return { x: (event.clientX - rect.left) / zoom, y: (event.clientY - rect.top) / zoom };
   }
 
   private activateStaff(staffId: string | null): void {
@@ -155,7 +253,8 @@ export class StaffView {
     const left = Math.min(this.dragStartX, event.clientX);
     const right = Math.max(this.dragStartX, event.clientX);
     const hostLeft = host.getBoundingClientRect().left;
-    this.selectionBox.set({ left: left - hostLeft, width: right - left });
+    const zoom = this.viewZoom.zoom();
+    this.selectionBox.set({ left: (left - hostLeft) / zoom, width: (right - left) / zoom });
 
     const ids = Array.from(host.querySelectorAll(`[${SCORE_ELEMENT_ID_ATTR}]`))
       .filter((node) => {

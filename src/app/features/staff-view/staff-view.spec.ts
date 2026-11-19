@@ -6,6 +6,7 @@ import { CaretService } from '../../core/state/caret.service';
 import { NoteInputService } from '../../core/state/note-input.service';
 import { ScoreModelService } from '../../core/state/score-model.service';
 import { SelectionService } from '../../core/state/selection.service';
+import { ViewZoomService } from '../../core/state/view-zoom.service';
 import { StaffView } from './staff-view';
 
 describe('StaffView', () => {
@@ -90,6 +91,67 @@ describe('StaffView', () => {
     const elements = scoreModel.score().measures[0].elements;
     expect(elements.length).toBe(1);
     expect(elements[0].kind).toBe('note');
+  });
+
+  it('maps a click through the zoom, so a zoomed-in click enters the pitch under the pointer', () => {
+    renderSpy.and.callThrough();
+    noteInput.setActive(true);
+    TestBed.inject(ViewZoomService).set(2);
+    const fixture = TestBed.createComponent(StaffView);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement.querySelector('.staff-canvas') as HTMLDivElement;
+    spyOn(host, 'getBoundingClientRect').and.returnValue({ top: 0, left: 0 } as DOMRect);
+    const { topLineY } = TestBed.inject(NotationRendererService).getStaffGeometry();
+    // On screen everything is twice as far from the top: this is the top line (F5 in treble clef).
+    host.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 200, clientY: topLineY * 2 }));
+
+    const note = scoreModel.score().measures[0].elements[0];
+    expect(note.kind === 'note' && `${note.pitch.step}${note.pitch.octave}`).toBe('F5');
+  });
+
+  it('previews the note a click would enter while the pointer moves over the staff in note input', () => {
+    renderSpy.and.callThrough();
+    const fixture = TestBed.createComponent(StaffView);
+    fixture.detectChanges();
+    const host = fixture.nativeElement.querySelector('.staff-canvas') as HTMLDivElement;
+    spyOn(host, 'getBoundingClientRect').and.returnValue({ top: 0, left: 0 } as DOMRect);
+    const { topLineY, halfStepPx } = TestBed.inject(NotationRendererService).getStaffGeometry();
+    const move = () =>
+      host.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 200, clientY: topLineY + halfStepPx * 2 + 1 }));
+
+    move();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.note-ghost')).toBeNull();
+
+    noteInput.setActive(true);
+    move();
+    fixture.detectChanges();
+    const ghost = fixture.nativeElement.querySelector('.note-ghost') as HTMLElement;
+    expect(ghost.textContent?.trim()).toBe('D5');
+    // Snapped onto the line, not left where the pointer happened to be.
+    expect(parseFloat(ghost.style.top)).toBeCloseTo(topLineY + halfStepPx * 2, 5);
+
+    host.dispatchEvent(new MouseEvent('mouseleave'));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.note-ghost')).toBeNull();
+  });
+
+  it('zooms on a pinch (Ctrl + wheel) but leaves plain scrolling alone', () => {
+    const zoom = TestBed.inject(ViewZoomService);
+    const fixture = TestBed.createComponent(StaffView);
+    fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+
+    const plain = new WheelEvent('wheel', { deltaY: -50, cancelable: true });
+    element.dispatchEvent(plain);
+    expect(zoom.zoom()).toBe(1);
+    expect(plain.defaultPrevented).toBeFalse();
+
+    const pinch = new WheelEvent('wheel', { deltaY: -50, ctrlKey: true, cancelable: true });
+    element.dispatchEvent(pinch);
+    expect(zoom.zoom()).toBeGreaterThan(1);
+    expect(pinch.defaultPrevented).toBeTrue();
   });
 
   it('passes no caret to the renderer while note input is off', () => {

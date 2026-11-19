@@ -11,6 +11,7 @@
   >
     @if (mode() === 'saveAs') {
       <h2>Sačuvaj kao</h2>
+      <p class="lede">Partitura se čuva u biblioteci ovog browsera.</p>
       <form class="save-form" (submit)="onSaveAs($event, nameInput.value)">
         <label for="score-name">Naziv partiture</label>
         <input id="score-name" #nameInput type="text" maxlength="80" [value]="session.currentName()" />
@@ -18,12 +19,13 @@
       </form>
     } @else {
       <h2>Otvori partituru</h2>
+      <p class="lede">Partiture sačuvane u ovom browseru, najnovije prve.</p>
       <ul class="entries">
         @for (entry of session.scores(); track entry.id) {
           <li class="entry" [class.entry--current]="entry.id === session.currentId()">
             <span class="entry__name">{{ entry.name }}</span>
             <span class="entry__date">{{ entry.modified | date: 'dd.MM.yyyy HH:mm' }}</span>
-            <button type="button" (click)="onOpen(entry.id)">Otvori</button>
+            <button type="button" class="ghost" (click)="onOpen(entry.id)">Otvori</button>
             <button
               type="button"
               class="danger"

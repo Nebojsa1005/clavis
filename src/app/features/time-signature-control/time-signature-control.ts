@@ -7,12 +7,14 @@ import {
   validateTimeSignature,
 } from '../../core/models/time-signature.util';
 import { ScoreModelService } from '../../core/state/score-model.service';
+import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
 const CUSTOM_VALUE = 'custom';
 
 /** Toolbar control: preset dropdown plus a custom numerator/denominator editor with validation. */
 @Component({
   selector: 'app-time-signature-control',
+  imports: [HlmTooltipImports],
   templateUrl: './time-signature-control.html',
   styleUrl: './time-signature-control.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

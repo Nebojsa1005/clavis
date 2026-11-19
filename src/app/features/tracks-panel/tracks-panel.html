@@ -17,20 +17,20 @@
               (blur)="commitRename(part, renameInput.value)"
             />
           } @else {
-            <span class="part__name" title="Dvoklik za promenu naziva" (dblclick)="startRename(part)">{{ part.name }}</span>
+            <span class="part__name" hlmTooltip="Dvoklik za promenu naziva" position="left" (dblclick)="startRename(part)">{{ part.name }}</span>
             <span class="part__actions">
-              <button type="button" class="icon-btn" title="Preimenuj" aria-label="Preimenuj" (click)="startRename(part)">✎</button>
-              <button type="button" class="icon-btn" title="Pomeri gore" aria-label="Pomeri gore" [disabled]="first" (click)="onMove(part, -1)">▲</button>
-              <button type="button" class="icon-btn" title="Pomeri dole" aria-label="Pomeri dole" [disabled]="last" (click)="onMove(part, 1)">▼</button>
+              <button type="button" class="icon-btn" hlmTooltip="Preimenuj" position="left" aria-label="Preimenuj" (click)="startRename(part)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 2.5l3 3L6 13H3v-3z" /></svg></button>
+              <button type="button" class="icon-btn" hlmTooltip="Pomeri gore" position="left" aria-label="Pomeri gore" [disabled]="first" (click)="onMove(part, -1)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4" /></svg></button>
+              <button type="button" class="icon-btn" hlmTooltip="Pomeri dole" position="left" aria-label="Pomeri dole" [disabled]="last" (click)="onMove(part, 1)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" /></svg></button>
               <button
                 type="button"
                 class="icon-btn"
-                title="Ukloni instrument"
+                hlmTooltip="Ukloni instrument" position="left"
                 aria-label="Ukloni instrument"
                 [disabled]="scoreModel.document().parts.length < 2"
                 (click)="onRemove(part)"
               >
-                ✕
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" /></svg>
               </button>
             </span>
           }
@@ -60,6 +60,9 @@
         <option [value]="preset.id">{{ preset.name }}</option>
       }
     </select>
-    <button type="button" class="add-btn" (click)="onAdd(presetSelect.value)">+ Dodaj</button>
+    <button type="button" class="add-btn" (click)="onAdd(presetSelect.value)">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9" /></svg>
+      Dodaj
+    </button>
   </div>
 </section>

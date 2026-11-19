@@ -1,4 +1,4 @@
-<select class="key-select" aria-label="Tonalitet" title="Tonalitet" (change)="onChange($event)">
+<select class="key-select" aria-label="Tonalitet" hlmTooltip="Tonalitet" position="bottom" (change)="onChange($event)">
   <optgroup label="Dur">
     @for (option of majorKeys; track option.value) {
       <option [value]="option.value" [selected]="option.value === scoreModel.score().keySignature">

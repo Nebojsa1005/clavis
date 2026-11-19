@@ -1,0 +1,19 @@
+<div
+  #canvas
+  class="hero-staff__canvas"
+  tabindex="0"
+  role="group"
+  aria-label="Probni notni štap. Strelice gore i dole biraju visinu, Enter upisuje notu, Backspace briše poslednju."
+  (pointermove)="onPointerMove($event)"
+  (pointerleave)="onPointerLeave()"
+  (pointerdown)="onPointerDown($event)"
+  (keydown)="onKeydown($event)"
+  (blur)="onBlur()"
+></div>
+<p class="hero-staff__hint">
+  @if (touch()) {
+    Dodirni štap da upišeš notu.
+  } @else {
+    Pređi mišem preko štapa i klikni da upišeš notu.
+  }
+</p>

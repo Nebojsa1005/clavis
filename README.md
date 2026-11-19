@@ -22,6 +22,9 @@ Napomena: Angular CLI 22 (latest tag na npm-u) traži Node 22+. Ovaj projekat je
 ## Tech stack
 
 - **Angular 20**, standalone komponente, strict TypeScript, signals za state (bez NgRx)
+- **Tailwind CSS v4** + **Spartan UI** (`@spartan-ng/brain` headless + helm komponente u `src/app/ui/`) —
+  `brain@0.0.1-alpha.707`, poslednja verzija za Angular 20 (1.x traži Angular 21)
+- **anime.js v4** — animacije landing strane
 - **VexFlow** — renderovanje notnog teksta (SVG)
 - **Tone.js** — audio plejbek (Web Audio API scheduling + synth)
 - **midi-writer-js** — MIDI export
@@ -62,12 +65,18 @@ src/app/
 │   │   └── clipboard.service.ts     # interni clipboard
 │   └── utils/download.util.ts       # Blob → browser download
 ├── features/
+│   ├── home/                        # landing strana (/): hero štap (anime.js), funkcije, koraci
+│   ├── editor-page/                 # editor (/editor): toolbar + layout + prečice na tastaturi
 │   ├── staff-view/                  # <svg> + klik, selekcija prevlačenjem, unos klikom
 │   ├── tracks-panel/                # instrumenti: izbor štapa, dodaj/ukloni/preimenuj/pomeri
 │   ├── library-dialog/              # Otvori / Sačuvaj kao
 │   ├── time-signature-control/      # takt: preseti + proizvoljan X/Y
 │   └── key-signature-control/       # tonalitet
-└── app.ts / app.html / app.scss     # toolbar + layout + prečice na tastaturi
+├── ui/                              # Spartan helm komponente (generisane, `@spartan-ng/helm/*`)
+├── app.routes.ts                    # lazy rute: '' → home, 'editor' → editor
+└── app.ts                           # shell: samo <router-outlet />
+
+src/tailwind.css                     # dizajn tokeni (neutral skala → semantički alias-i) + Tailwind v4
 ```
 
 ### Model

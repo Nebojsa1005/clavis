@@ -1,4 +1,4 @@
-<select class="time-select" aria-label="Takt" title="Takt" (change)="onSelect($event)">
+<select class="time-select" aria-label="Takt" hlmTooltip="Takt" position="bottom" (change)="onSelect($event)">
   @for (option of presets; track option.value) {
     <option [value]="option.value" [selected]="selectedValue() === option.value">{{ option.value }}</option>
   }

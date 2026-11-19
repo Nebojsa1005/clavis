@@ -3,6 +3,7 @@ import { INSTRUMENT_PRESETS } from '../../core/models/instruments';
 import { Clef } from '../../core/models/score.model';
 import { Part } from '../../core/models/score-document';
 import { ScoreModelService } from '../../core/state/score-model.service';
+import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
 const CLEF_NAMES: Record<Clef, string> = {
   treble: 'violinski ključ',
@@ -17,6 +18,7 @@ const CLEF_NAMES: Record<Clef, string> = {
  */
 @Component({
   selector: 'app-tracks-panel',
+  imports: [HlmTooltipImports],
   templateUrl: './tracks-panel.html',
   styleUrl: './tracks-panel.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -1,10 +1,12 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { MAJOR_KEY_OPTIONS, MINOR_KEY_OPTIONS } from '../../core/models/key-signature.util';
 import { ScoreModelService } from '../../core/state/score-model.service';
+import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
 /** Toolbar dropdown for the key signature, grouped into major and minor keys. */
 @Component({
   selector: 'app-key-signature-control',
+  imports: [HlmTooltipImports],
   templateUrl: './key-signature-control.html',
   styleUrl: './key-signature-control.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

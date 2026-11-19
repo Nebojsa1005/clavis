@@ -127,6 +127,11 @@
   }
 }
 
+.zoom-value {
+  min-width: 56px;
+  font-variant-numeric: tabular-nums;
+}
+
 .staff-area {
   flex: 1;
   display: flex;

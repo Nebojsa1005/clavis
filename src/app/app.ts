@@ -9,6 +9,7 @@ import { NoteInputService } from './core/state/note-input.service';
 import { ScoreSessionService, UNTITLED_SCORE_NAME } from './core/state/score-session.service';
 import { ScoreModelService } from './core/state/score-model.service';
 import { SelectionService } from './core/state/selection.service';
+import { ViewZoomService } from './core/state/view-zoom.service';
 import { KeySignatureControl } from './features/key-signature-control/key-signature-control';
 import { LibraryDialog, LibraryDialogMode } from './features/library-dialog/library-dialog';
 import { StaffView } from './features/staff-view/staff-view';
@@ -55,6 +56,7 @@ export class App {
   private readonly exportService = inject(ExportService);
   private readonly persistence = inject(PersistenceService);
   protected readonly session = inject(ScoreSessionService);
+  protected readonly viewZoom = inject(ViewZoomService);
 
   protected readonly durationOptions: DurationOption[] = [
     { value: 'whole', key: '1', label: 'Cela' },

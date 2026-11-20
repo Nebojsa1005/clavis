@@ -8,10 +8,17 @@
     (mousemove)="onCanvasMouseMove($event)"
     (mouseleave)="onCanvasMouseLeave()"
   ></div>
-  @if (ghost(); as preview) {
-    <div class="note-ghost" [style.left.px]="preview.x" [style.top.px]="preview.y">
-      <span class="note-ghost__label">{{ preview.label }}</span>
-    </div>
+  @if (ghostNote(); as preview) {
+    <svg class="note-ghost" [style.left.px]="preview.x" [style.top.px]="preview.y" aria-hidden="true">
+      @for (ledger of preview.ledgers; track $index) {
+        <line [attr.x1]="ledger.x1" [attr.x2]="ledger.x2" [attr.y1]="ledger.y" [attr.y2]="ledger.y" [attr.stroke-width]="preview.ledgerWidth" />
+      }
+      <path [attr.d]="preview.path" [attr.transform]="preview.transform" />
+      @if (preview.dot; as dot) {
+        <path [attr.d]="dot.path" [attr.transform]="dot.transform" />
+      }
+    </svg>
+    <span class="note-ghost__label" [style.left.px]="preview.x + preview.labelX" [style.top.px]="preview.y + preview.labelY">{{ preview.label }}</span>
   }
   @for (field of textFields(); track field.staffId) {
     <textarea

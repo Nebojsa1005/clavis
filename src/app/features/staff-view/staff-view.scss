@@ -5,30 +5,34 @@
   min-width: 100%;
 }
 
-/* Preview of the note head a click would enter, centred on (left, top). */
+/* Preview of the note a click would enter, drawn like the real thing in translucent ink; (left, top) is
+   the notehead centre. Blue stays reserved for what is selected. */
 .note-ghost {
   position: absolute;
-  width: 13px;
-  height: 9px;
-  margin: -4.5px 0 0 -6.5px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--color-accent) 45%, transparent);
-  transform: rotate(-20deg);
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  fill: var(--foreground);
+  stroke: var(--foreground);
+  opacity: 0.32;
   pointer-events: none;
+
+  path {
+    stroke: none;
+  }
 }
 
 .note-ghost__label {
   position: absolute;
-  left: 16px;
-  top: -16px;
-  padding: 0 3px;
+  padding: 0 4px;
   border-radius: 3px;
-  background: var(--color-accent);
-  color: #fff;
+  background: var(--foreground);
+  color: var(--background);
   font-size: 10px;
+  font-weight: 600;
   line-height: 14px;
-  transform: rotate(20deg);
   white-space: nowrap;
+  pointer-events: none;
 }
 
 .staff-canvas {

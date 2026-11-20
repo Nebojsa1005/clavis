@@ -33,6 +33,9 @@
       ],
       "@spartan-ng/helm/tooltip": [
         "./src/app/ui/tooltip/src/index.ts"
+      ],
+      "@spartan-ng/helm/input": [
+        "./src/app/ui/input/src/index.ts"
       ]
     }
   },

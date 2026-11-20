@@ -10,7 +10,7 @@ describe('TracksPanel', () => {
   let scoreModel: ScoreModelService;
 
   const root = () => fixture.nativeElement as HTMLElement;
-  const staffButtons = () => Array.from(root().querySelectorAll('.staff-btn')) as HTMLButtonElement[];
+  const staffButtons = () => Array.from(root().querySelectorAll('button[aria-pressed]')) as HTMLButtonElement[];
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({ imports: [TracksPanel] }).compileComponents();
@@ -23,7 +23,7 @@ describe('TracksPanel', () => {
   });
 
   it('lists every instrument by name', () => {
-    expect(Array.from(root().querySelectorAll('.part__name')).map((e) => e.textContent?.trim())).toEqual(['Klavir', 'Violina']);
+    expect(Array.from(root().querySelectorAll('[data-part-name]')).map((e) => e.textContent?.trim())).toEqual(['Klavir', 'Violina']);
   });
 
   it('lists the staves of each instrument, numbering those of a grand staff', () => {
@@ -47,7 +47,7 @@ describe('TracksPanel', () => {
   });
 
   describe('adding instruments', () => {
-    const presetSelect = () => root().querySelector('.add__select') as HTMLSelectElement;
+    const presetSelect = () => root().querySelector('select') as HTMLSelectElement;
 
     it('offers every instrument preset, piano first', () => {
       const names = Array.from(presetSelect().options).map((o) => o.textContent?.trim());
@@ -58,7 +58,7 @@ describe('TracksPanel', () => {
 
     it('adds the chosen instrument and activates its first staff', () => {
       presetSelect().value = 'cello';
-      (root().querySelector('.add-btn') as HTMLButtonElement).click();
+      (root().querySelector('select + button') as HTMLButtonElement).click();
       fixture.detectChanges();
 
       const parts = scoreModel.document().parts;
@@ -71,7 +71,7 @@ describe('TracksPanel', () => {
 
     it('adds a piano with two staves', () => {
       presetSelect().value = 'piano';
-      (root().querySelector('.add-btn') as HTMLButtonElement).click();
+      (root().querySelector('select + button') as HTMLButtonElement).click();
       fixture.detectChanges();
 
       expect(scoreModel.document().parts[2].staves.length).toBe(2);
@@ -109,7 +109,7 @@ describe('TracksPanel', () => {
 
   describe('reordering instruments', () => {
     const moveButtons = (title: string) => Array.from(root().querySelectorAll(`button[hlmtooltip="${title}"]`)) as HTMLButtonElement[];
-    const names = () => Array.from(root().querySelectorAll('.part__name')).map((e) => e.textContent?.trim());
+    const names = () => Array.from(root().querySelectorAll('[data-part-name]')).map((e) => e.textContent?.trim());
 
     it('moves an instrument down and up', () => {
       moveButtons('Pomeri dole')[0].click();
@@ -131,9 +131,9 @@ describe('TracksPanel', () => {
 
   describe('renaming instruments', () => {
     const startRename = (index = 0) =>
-      (root().querySelectorAll('button[hlmtooltip="Preimenuj"]')[index] as HTMLButtonElement).click();
-    const input = () => root().querySelector('.part__rename') as HTMLInputElement | null;
-    const names = () => Array.from(root().querySelectorAll('.part__name')).map((e) => e.textContent?.trim());
+      (root().querySelectorAll('[data-part-name]')[index] as HTMLButtonElement).click();
+    const input = () => root().querySelector('input[aria-label="Naziv instrumenta"]') as HTMLInputElement | null;
+    const names = () => Array.from(root().querySelectorAll('[data-part-name]')).map((e) => e.textContent?.trim());
 
     it('shows an input with the current name, focused and selected', () => {
       startRename();
@@ -141,13 +141,6 @@ describe('TracksPanel', () => {
 
       expect(input()!.value).toBe('Klavir');
       expect(document.activeElement).toBe(input());
-    });
-
-    it('also starts on a double click of the name', () => {
-      root().querySelector('.part__name')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-      fixture.detectChanges();
-
-      expect(input()).not.toBeNull();
     });
 
     it('saves the new name on Enter', () => {

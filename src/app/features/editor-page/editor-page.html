@@ -14,25 +14,7 @@
         <button hlmBtn variant="ghost" size="sm" type="button" (click)="onNew()" hlmTooltip="Nova, prazna partitura" position="bottom">Novo</button>
         <button hlmBtn variant="ghost" size="sm" type="button" (click)="onOpen()" hlmTooltip="Otvori sačuvanu partituru" position="bottom">Otvori</button>
         <button hlmBtn variant="ghost" size="sm" type="button" (click)="onSaveAs()" hlmTooltip="Sačuvaj kao nova partitura" position="bottom">Sačuvaj kao</button>
-        <input
-          type="file"
-          accept="application/json"
-          class="visually-hidden"
-          #jsonFileInput
-          (change)="onImportJsonFile($event)"
-        />
-        <button hlmBtn variant="ghost" size="sm" type="button" (click)="jsonFileInput.click()" hlmTooltip="Import JSON" position="bottom">Import</button>
-        <button hlmBtn variant="ghost" size="sm" type="button" (click)="onExportJson()" hlmTooltip="Export JSON" position="bottom">JSON</button>
-
-        <span class="mx-2 h-5 w-px shrink-0 bg-border" aria-hidden="true"></span>
-        <span class="hidden pr-1 text-caption text-muted-foreground sm:inline">Export</span>
-        <div class="segmented" role="group" aria-label="Export">
-          <button hlmBtn variant="ghost" size="sm" type="button" (click)="onExportMusicXml()" hlmTooltip="Export MusicXML" position="bottom">XML</button>
-          <button hlmBtn variant="ghost" size="sm" type="button" (click)="onExportMidi()" hlmTooltip="Export MIDI" position="bottom">MIDI</button>
-          <button hlmBtn variant="ghost" size="sm" type="button" (click)="onExportPng()" hlmTooltip="Export PNG" position="bottom">PNG</button>
-          <button hlmBtn variant="ghost" size="sm" type="button" (click)="onExportSvg()" hlmTooltip="Export SVG" position="bottom">SVG</button>
-          <button hlmBtn variant="ghost" size="sm" type="button" (click)="onExportPdf()" hlmTooltip="Export PDF (A4)" position="bottom">PDF</button>
-        </div>
+        <button hlmBtn variant="ghost" size="sm" type="button" (click)="onExportPdf()" hlmTooltip="Export PDF (A4)" position="bottom">Export PDF</button>
       </nav>
 
       <button hlmBtn size="sm" type="button" class="ml-auto shrink-0 px-4 lg:ml-2" (click)="onSave()" hlmTooltip="Sačuvaj (Ctrl+S)" position="bottom">Sačuvaj</button>

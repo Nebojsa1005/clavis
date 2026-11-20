@@ -35,7 +35,7 @@ export interface StaffRef {
   globalIndex: number;
 }
 
-export const DEFAULT_PART_NAME = 'Instrument';
+export const DEFAULT_PART_NAME = 'Klavir';
 
 export function createStaff(score: Score): Staff {
   return { id: createId(), score };

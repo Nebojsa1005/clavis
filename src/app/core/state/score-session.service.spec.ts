@@ -218,7 +218,7 @@ describe('ScoreSessionService', () => {
 
       await session.open(id);
 
-      expect(scoreModel.document().parts.map((p) => p.name)).toEqual(['Instrument', 'Klavir']);
+      expect(scoreModel.document().parts.map((p) => p.name)).toEqual(['Klavir', 'Klavir']);
       expect(scoreModel.document().parts[1].staves.map((s) => s.score.clef)).toEqual(['treble', 'bass']);
     });
 

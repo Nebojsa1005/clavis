@@ -295,7 +295,14 @@ export class StaffView {
     if (!this.noteInput.active()) {
       // Outside note input a click on empty staff selects the whole measure under the pointer.
       if (position) {
-        this.selection.selectMeasure(position.measureIndex, event.shiftKey);
+        const measure = this.scoreModel.score().measures[position.measureIndex];
+        if (measure && measure.elements.length === 0) {
+          // Nothing to select in an empty measure: a click there starts note entry.
+          this.noteInput.setActive(true);
+          this.caretService.setPosition(position);
+        } else {
+          this.selection.selectMeasure(position.measureIndex, event.shiftKey);
+        }
       }
       return;
     }
@@ -305,6 +312,8 @@ export class StaffView {
     }
     const geometry = this.notationRenderer.getStaffGeometry(activeStaffId);
     this.noteInput.enterPitchFromClick(this.scoreModel.score().clef, y, geometry.topLineY, geometry.halfStepPx);
+    // The caret moved past the new note; drop the stale preview (and its label) until the pointer moves.
+    this.ghost.set(null);
   }
 
   /** Pointer position in the coordinates of the rendered score, whatever the zoom. */

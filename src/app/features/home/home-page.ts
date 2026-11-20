@@ -86,11 +86,11 @@ export class HomePage {
   protected readonly steps: Step[] = [
     {
       title: 'Otvori editor',
-      text: 'Nema instalacije ni prijave. Partitura na kojoj si poslednji put radio vraća se sama.',
+      text: 'Nema instalacije ni prijave. Poslednja sačuvana partitura otvara se sama, a editor te upozori ako ima nesačuvanih izmena.',
     },
     {
       title: 'Upiši note',
-      text: 'Klikni na štap ili pritisni N i kucaj. Brojevi biraju trajanje, strelice pomeraju kursor.',
+      text: 'Pritisni N, klikni na štap na visini note i upiši je. Brojevi biraju trajanje, strelice pomeraju kursor.',
     },
     {
       title: 'Preslušaj',

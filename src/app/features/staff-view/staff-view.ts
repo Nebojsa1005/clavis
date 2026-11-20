@@ -3,6 +3,7 @@ import {
   Component,
   ElementRef,
   HostListener,
+  computed,
   effect,
   inject,
   signal,
@@ -22,6 +23,13 @@ import { NoteInputService } from '../../core/state/note-input.service';
 import { ScoreModelService } from '../../core/state/score-model.service';
 import { SelectionService } from '../../core/state/selection.service';
 import { ViewZoomService } from '../../core/state/view-zoom.service';
+import {
+  AUGMENTATION_DOT,
+  GLYPH_UNITS_PER_STAFF_SPACE,
+  NOTE_GLYPHS,
+  NOTE_GLYPHS_STEM_DOWN,
+  NOTEHEAD_BLACK,
+} from '../../shared/smufl-glyphs';
 
 /** Pointer travel (px) before a press on the staff turns into a drag selection instead of a click. */
 const DRAG_THRESHOLD_PX = 4;
@@ -31,11 +39,33 @@ const WHEEL_ZOOM_SPEED = 0.01;
 /** The preview note head sits this far right of the caret line, where the inserted note will be. */
 const GHOST_OFFSET_X = 14;
 
+/** Staff position of the middle line, counted in half steps down from the top line. */
+const MIDDLE_LINE_STEPS = 4;
+const BOTTOM_LINE_STEPS = 8;
+
 /** Where the next click would put a note: the spot on the staff and the pitch it stands for. */
 export interface NoteGhost {
   x: number;
   y: number;
   label: string;
+  /** Half steps below the top staff line (negative above the staff). */
+  steps: number;
+  /** One staff space in px. */
+  space: number;
+}
+
+/** The preview drawn as a real note of the selected duration, in px relative to its notehead centre. */
+interface GhostNote {
+  x: number;
+  y: number;
+  label: string;
+  path: string;
+  transform: string;
+  ledgers: { y: number; x1: number; x2: number }[];
+  ledgerWidth: number;
+  dot: { path: string; transform: string } | null;
+  labelX: number;
+  labelY: number;
 }
 
 /** The nearest ancestor that scrolls, which is what has to move to keep the pointer still while zooming. */
@@ -75,6 +105,50 @@ export class StaffView {
 
   /** Preview of the note a click would enter, while the pointer is over the staff in note input. */
   protected readonly ghost = signal<NoteGhost | null>(null);
+
+  /** The ghost as the note a click would enter: same glyph, stem direction, ledger lines and dot. */
+  protected readonly ghostNote = computed<GhostNote | null>(() => {
+    const ghost = this.ghost();
+    if (!ghost) {
+      return null;
+    }
+    const { steps, space } = ghost;
+    const duration = this.noteInput.currentDuration();
+    const stemDown = steps <= MIDDLE_LINE_STEPS;
+    const glyph = (stemDown ? NOTE_GLYPHS_STEM_DOWN : NOTE_GLYPHS)[duration];
+    const scale = space / GLYPH_UNITS_PER_STAFF_SPACE;
+    const headWidth = (duration === 'whole' ? NOTE_GLYPHS.whole.bounds[2] : NOTEHEAD_BLACK.width) * scale;
+    const half = space / 2;
+
+    const ledgerHalf = headWidth * 0.8;
+    const ledgers: GhostNote['ledgers'] = [];
+    for (let s = -2; s >= steps; s -= 2) {
+      ledgers.push({ y: (s - steps) * half, x1: -ledgerHalf, x2: ledgerHalf });
+    }
+    for (let s = BOTTOM_LINE_STEPS + 2; s <= steps; s += 2) {
+      ledgers.push({ y: (s - steps) * half, x1: -ledgerHalf, x2: ledgerHalf });
+    }
+
+    // A dot on a line moves up into the space above, as in printed music.
+    const dotX = headWidth / 2 + space * 0.5;
+    const dotY = steps % 2 === 0 ? -half : 0;
+    const dot = this.noteInput.dotted()
+      ? { path: AUGMENTATION_DOT.path, transform: `translate(${dotX} ${dotY}) scale(${scale} ${-scale})` }
+      : null;
+
+    return {
+      x: ghost.x,
+      y: ghost.y,
+      label: ghost.label,
+      path: glyph.path,
+      transform: `translate(${-headWidth / 2} 0) scale(${scale} ${-scale})`,
+      ledgers,
+      ledgerWidth: Math.max(1, space * 0.13),
+      dot,
+      labelX: dotX + space * (dot ? 1 : 0.2),
+      labelY: -space * 1.4,
+    };
+  });
 
   private dragStartX: number | null = null;
   private dragging = false;
@@ -154,7 +228,13 @@ export class StaffView {
     const { topLineY, halfStepPx } = this.notationRenderer.getStaffGeometry(staffId);
     const steps = Math.round((y - topLineY) / halfStepPx);
     const pitch = pitchFromClickY(staff.score.clef, y, topLineY, halfStepPx);
-    this.ghost.set({ x: caretX + GHOST_OFFSET_X, y: topLineY + steps * halfStepPx, label: `${pitch.step}${pitch.octave}` });
+    this.ghost.set({
+      x: caretX + GHOST_OFFSET_X,
+      y: topLineY + steps * halfStepPx,
+      label: `${pitch.step}${pitch.octave}`,
+      steps,
+      space: halfStepPx * 2,
+    });
   }
 
   protected onCanvasMouseLeave(): void {

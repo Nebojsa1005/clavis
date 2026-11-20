@@ -1,0 +1,84 @@
+:host {
+  display: block;
+  color: var(--foreground);
+}
+
+.hero-staff__canvas {
+  position: relative;
+  width: 100%;
+  cursor: crosshair;
+  touch-action: manipulation;
+  outline: none;
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--ring);
+  }
+
+  // The scene builds its own SVG, outside Angular's view encapsulation.
+  ::ng-deep {
+    .hs-svg {
+      display: block;
+      overflow: visible;
+    }
+
+    .hs-line,
+    .hs-barline,
+    .hs-ledger,
+    .hs-stem,
+    .hs-caret {
+      stroke: currentColor;
+    }
+
+    .hs-head,
+    .hs-clef {
+      fill: currentColor;
+    }
+
+    .hs-clef,
+    .hs-note-body {
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+
+    .hs-ghost {
+      opacity: 0.28;
+    }
+
+    .hs-fade-stop {
+      stop-color: var(--background);
+    }
+
+    .hs-caret {
+      animation: hs-caret-blink 1.1s steps(1) infinite;
+    }
+  }
+}
+
+.hero-staff__hint {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+  color: var(--muted-foreground);
+
+  @media (min-width: 640px) {
+    padding: 0 1.5rem;
+  }
+
+  @media (min-width: 1024px) {
+    padding: 0 2rem;
+  }
+}
+
+@keyframes hs-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-staff__canvas ::ng-deep .hs-caret {
+    animation: none;
+  }
+}

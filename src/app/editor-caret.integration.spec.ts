@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { App } from './app';
+import { provideRouter } from '@angular/router';
+import { EditorPage } from './features/editor-page/editor-page';
 import { CARET_CLASS, NotationRendererService } from './core/services/notation-renderer.service';
 import { LIBRARY_DB_NAME } from './core/services/score-library.service';
 import { createEmptyScore, createMeasure, createNote, MeasureElement, Step } from './core/models/score.model';
@@ -14,7 +15,7 @@ import { SelectionService } from './core/state/selection.service';
  * nothing is mocked except the IndexedDB load, which would race with the test fixtures.
  */
 describe('Caret editing (integration)', () => {
-  let fixture: ComponentFixture<App>;
+  let fixture: ComponentFixture<EditorPage>;
   let scoreModel: ScoreModelService;
   let caret: CaretService;
   let noteInput: NoteInputService;
@@ -41,8 +42,8 @@ describe('Caret editing (integration)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [App],
-      providers: [{ provide: LIBRARY_DB_NAME, useValue: `clavis-test-${crypto.randomUUID()}` }],
+      imports: [EditorPage],
+      providers: [provideRouter([]), { provide: LIBRARY_DB_NAME, useValue: `clavis-test-${crypto.randomUUID()}` }],
     }).compileComponents();
 
     scoreModel = TestBed.inject(ScoreModelService);
@@ -50,7 +51,7 @@ describe('Caret editing (integration)', () => {
     noteInput = TestBed.inject(NoteInputService);
     renderer = TestBed.inject(NotationRendererService);
 
-    fixture = TestBed.createComponent(App);
+    fixture = TestBed.createComponent(EditorPage);
     fixture.detectChanges();
   });
 
@@ -529,7 +530,7 @@ describe('Caret editing (integration)', () => {
       clickNode(0);
       fixture.detectChanges();
 
-      const button = fixture.nativeElement.querySelector('button[title="Luk trajanja (T)"]') as HTMLButtonElement;
+      const button = fixture.nativeElement.querySelector('button[hlmtooltip="Luk trajanja (T)"]') as HTMLButtonElement;
       expect(button.getAttribute('aria-pressed')).toBe('true');
     });
 
@@ -728,7 +729,7 @@ describe('Caret editing (integration)', () => {
     it('lights up the beam button while a beamed note is selected', () => {
       setup(eighths(4));
       clickNode(0);
-      const button = fixture.nativeElement.querySelector('button[title^="Spoji ili razdvoji"]') as HTMLButtonElement;
+      const button = fixture.nativeElement.querySelector('button[hlmtooltip^="Spoji ili razdvoji"]') as HTMLButtonElement;
       expect(button.getAttribute('aria-pressed')).toBe('true');
 
       clickNode(1);
@@ -740,11 +741,11 @@ describe('Caret editing (integration)', () => {
       clickNode(1);
       clickNode(2, { shiftKey: true });
 
-      (fixture.nativeElement.querySelector('button[title^="Spoji ili razdvoji"]') as HTMLButtonElement).click();
+      (fixture.nativeElement.querySelector('button[hlmtooltip^="Spoji ili razdvoji"]') as HTMLButtonElement).click();
       fixture.detectChanges();
       expect(beams()).toBe(1);
 
-      (fixture.nativeElement.querySelector('button[title^="Greda automatski"]') as HTMLButtonElement).click();
+      (fixture.nativeElement.querySelector('button[hlmtooltip^="Greda automatski"]') as HTMLButtonElement).click();
       fixture.detectChanges();
       expect(beams()).toBe(2);
     });

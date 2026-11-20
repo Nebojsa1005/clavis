@@ -5,47 +5,91 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--color-fg) 35%, transparent);
+  padding: 16px;
+  background: color-mix(in srgb, var(--color-neutral-950) 28%, transparent);
+  backdrop-filter: blur(3px);
+  animation: backdrop-in 160ms ease-out;
 }
 
 .dialog {
-  width: min(520px, calc(100vw - 2 * var(--space-3)));
+  width: min(520px, 100%);
   max-height: 80vh;
   overflow: auto;
-  padding: var(--space-3);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  padding: 24px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 2px rgb(11 11 10 / 0.06),
+    0 24px 48px -16px rgb(11 11 10 / 0.25);
   outline: none;
+  animation: dialog-in 220ms var(--ease-out-expo);
 
   h2 {
-    margin: 0 0 var(--space-3);
-    font-size: 1rem;
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.375rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
   }
+}
+
+.lede {
+  margin: 4px 0 20px;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
 }
 
 button,
 input {
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
 }
 
 button {
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  height: 36px;
+  border: 1px solid var(--border);
+  background: var(--card);
   color: var(--color-fg);
-  border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
+  border-radius: 6px;
+  padding: 0 14px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
 
   &:hover {
-    background: var(--color-hover);
+    background: var(--muted);
   }
 
-  &.primary,
+  &.primary {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-foreground);
+
+    &:hover {
+      background: color-mix(in srgb, var(--primary) 82%, var(--background));
+    }
+  }
+
+  &.ghost {
+    border-color: transparent;
+  }
+
+  &.danger {
+    border-color: transparent;
+    color: var(--muted-foreground);
+
+    &:hover {
+      color: var(--destructive);
+      background: color-mix(in srgb, var(--destructive) 8%, transparent);
+    }
+  }
+
+  // Second click deletes: the one place colour is allowed, because it means "destructive".
   &.danger--armed {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
+    border-color: var(--destructive);
+    color: var(--destructive);
+    background: color-mix(in srgb, var(--destructive) 8%, transparent);
   }
 }
 
@@ -53,20 +97,22 @@ button {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: 8px;
 
   label {
     flex-basis: 100%;
-    font-size: 0.85rem;
-    color: var(--color-fg-muted);
+    font-size: 0.8125rem;
+    font-weight: 500;
   }
 
   input {
     flex: 1;
     min-width: 0;
-    padding: var(--space-1) var(--space-2);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--input);
+    border-radius: 6px;
+    background: var(--background);
   }
 }
 
@@ -74,18 +120,26 @@ button {
   list-style: none;
   margin: 0;
   padding: 0;
+  border-top: 1px solid var(--border);
 }
 
 .entry {
   display: grid;
   grid-template-columns: 1fr auto auto auto;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--color-border);
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
 
-  &--current .entry__name {
-    color: var(--color-accent);
+  // The open score gets the single ink mark.
+  &--current .entry__name::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin: 0 8px 1px 0;
+    border-radius: 50%;
+    background: var(--active-mark);
   }
 }
 
@@ -93,28 +147,52 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.9375rem;
+  font-weight: 500;
 }
 
 .entry__date {
-  font-size: 0.8rem;
-  color: var(--color-fg-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
 }
 
 .empty {
-  padding: var(--space-3) 0;
-  color: var(--color-fg-muted);
-  font-size: 0.85rem;
+  padding: 24px 0;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
 }
 
 .error {
-  margin: var(--space-2) 0 0;
-  font-size: 0.85rem;
-  border-left: 2px solid var(--color-accent);
-  padding-left: var(--space-2);
+  margin: 12px 0 0;
+  font-size: 0.875rem;
+  color: var(--destructive);
+  border-left: 2px solid var(--destructive);
+  padding-left: 8px;
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: var(--space-3);
+  margin-top: 20px;
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .dialog {
+    animation: none;
+  }
 }

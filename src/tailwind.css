@@ -1,0 +1,138 @@
+/*
+ * Design tokens + Tailwind v4 entry.
+ *
+ * Three layers, so a dark theme only has to touch the middle one:
+ *   1. raw neutral scale (--color-neutral-*) — warm-neutral greys, Radix-style steps;
+ *   2. semantic aliases on :root (--background, --foreground, --border …) — what components use;
+ *   3. @theme inline — exposes the aliases to Tailwind as bg-background, text-muted-foreground …
+ *
+ * Preflight lives in the `base` layer, so the editor's unlayered component styles always win.
+ */
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/preflight.css' layer(base);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tw-animate-css';
+/* Positioning container for Spartan overlays (tooltips) built on the CDK. */
+@import '@angular/cdk/overlay-prebuilt.css' layer(base);
+
+@source './app';
+
+/* Dark mode is opt-in via a `.dark` class (not the OS setting) until the dark token set exists;
+   otherwise helm's `dark:` utilities kick in on dark-OS machines over light tokens. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* 1 — warm-neutral scale. 50 = page, 950 = ink. Neither end is pure #fff / #000. */
+  --color-neutral-50: #fafaf9;
+  --color-neutral-100: #f3f3f1;
+  --color-neutral-200: #e8e8e5;
+  --color-neutral-300: #d9d9d5;
+  --color-neutral-400: #bcbcb7;
+  --color-neutral-500: #92928d;
+  --color-neutral-600: #6b6b67;
+  --color-neutral-700: #4f4f4c;
+  --color-neutral-800: #353533;
+  --color-neutral-900: #1f1f1e;
+  --color-neutral-950: #0b0b0a;
+
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Inter Tight', 'Inter', system-ui, sans-serif;
+
+  /* Type scale: display / h1 / h2 / body / caption. */
+  --text-display: clamp(2.75rem, 1.6rem + 4.6vw, 5.75rem);
+  --text-display--line-height: 0.98;
+  --text-display--letter-spacing: -0.04em;
+  --text-h1: clamp(2rem, 1.5rem + 2vw, 3.25rem);
+  --text-h1--line-height: 1.05;
+  --text-h1--letter-spacing: -0.03em;
+  --text-h2: clamp(1.375rem, 1.2rem + 0.7vw, 1.75rem);
+  --text-h2--line-height: 1.2;
+  --text-h2--letter-spacing: -0.02em;
+  --text-body: 1.0625rem;
+  --text-body--line-height: 1.65;
+  --text-caption: 0.8125rem;
+  --text-caption--line-height: 1.45;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 2 — semantic aliases. Names follow Spartan/shadcn so generated helm components pick them up. */
+:root {
+  --background: var(--color-neutral-50);
+  --foreground: var(--color-neutral-950);
+  --card: #fdfdfc;
+  --card-foreground: var(--color-neutral-950);
+  --popover: #fdfdfc;
+  --popover-foreground: var(--color-neutral-950);
+  --primary: var(--color-neutral-950);
+  --primary-foreground: var(--color-neutral-50);
+  --secondary: var(--color-neutral-100);
+  --secondary-foreground: var(--color-neutral-950);
+  --muted: var(--color-neutral-100);
+  --muted-foreground: var(--color-neutral-600);
+  --accent: var(--color-neutral-100);
+  --accent-foreground: var(--color-neutral-950);
+  --destructive: #b42318;
+  --border: var(--color-neutral-200);
+  --input: var(--color-neutral-300);
+  --ring: var(--color-neutral-950);
+  --placeholder: var(--color-neutral-500);
+  --disabled: var(--color-neutral-400);
+  /* The one allowed accent: a solid ink mark for "this is the active thing". */
+  --active-mark: var(--color-neutral-950);
+  --radius: 0.5rem;
+}
+
+/* 3 — expose aliases to Tailwind utilities. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-placeholder: var(--placeholder);
+  --color-disabled: var(--disabled);
+  --color-active-mark: var(--active-mark);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: var(--color-neutral-950);
+    color: var(--color-neutral-50);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}

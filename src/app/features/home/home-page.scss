@@ -1,0 +1,163 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+// Content column; the hero staff's clef lines up with its left edge (see staffGeometry()).
+.page {
+  max-width: 1200px;
+  padding-inline: 1rem;
+
+  @media (min-width: 640px) {
+    padding-inline: 1.5rem;
+  }
+
+  @media (min-width: 1024px) {
+    padding-inline: 2rem;
+  }
+}
+
+// Hairline grid: the 1px gaps show the border colour through, so every cell shares its edges.
+.feature-grid {
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+}
+
+.feature {
+  background: var(--background);
+  transition: background-color 200ms ease;
+
+  &:hover {
+    background: var(--card);
+  }
+}
+
+.feature__icon {
+  display: block;
+  width: 2.5rem;
+  height: 2.5rem;
+
+  svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .i-faint {
+    opacity: 0.35;
+  }
+
+  // Each icon answers hover with one small, literal gesture.
+  .i-lift,
+  .i-turn,
+  .i-drop,
+  .i-lid,
+  .i-pulse {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform 320ms var(--ease-out-expo);
+  }
+
+  .i-turn {
+    transform-origin: 30% 50%;
+  }
+
+  .i-lid {
+    transform-origin: 0% 100%;
+  }
+}
+
+.feature:hover {
+  .i-lift {
+    transform: translateY(-4px);
+  }
+
+  .i-turn {
+    transform: rotate(-24deg);
+  }
+
+  .i-drop {
+    transform: translateY(3px);
+  }
+
+  .i-lid {
+    transform: rotate(-12deg) translateY(-1px);
+  }
+
+  .i-pulse {
+    transform: scale(1.15);
+  }
+
+  .i-blink {
+    animation: icon-blink 0.9s steps(1) infinite;
+  }
+}
+
+@keyframes icon-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+// "Kako radi" as bars of music: the top and bottom rules frame the row like outer staff lines,
+// each step opens with a barline and a bar number, and the last one ends on a double bar.
+.steps {
+  border-block: 1px solid var(--border);
+}
+
+.step {
+  position: relative;
+  padding: 2rem 0;
+
+  & + & {
+    border-top: 1px solid var(--border);
+  }
+
+  @media (min-width: 1024px) {
+    padding: 2.5rem 2rem 3rem;
+    border-left: 1px solid var(--foreground);
+
+    & + & {
+      border-top: 0;
+    }
+
+    // Final barline: thin line, then a thick one.
+    &:last-child {
+      border-right: 4px solid var(--foreground);
+
+      &::after {
+        content: '';
+        position: absolute;
+        inset-block: 0;
+        right: 5px;
+        width: 1px;
+        background: var(--foreground);
+      }
+    }
+  }
+}
+
+.step__number {
+  font-size: var(--text-caption);
+  line-height: 1;
+  font-weight: 600;
+  font-style: italic;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature,
+  .feature__icon * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

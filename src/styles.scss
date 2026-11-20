@@ -1,47 +1,29 @@
 :root {
-  // crno-bela paleta, sivi tonovi samo za hover/disabled stanja
-  --color-bg: #ffffff;
-  --color-surface: #ffffff;
-  --color-fg: #111111;
-  --color-fg-muted: #555555;
+  // Legacy editor tokens, now aliases onto the design tokens in tailwind.css.
+  --color-bg: var(--background);
+  --color-surface: var(--card);
+  --color-fg: var(--foreground);
+  --color-fg-muted: var(--muted-foreground);
 
-  --color-gray-100: #f5f5f5;
-  --color-gray-200: #e8e8e8;
-  --color-gray-300: #d4d4d4;
-  --color-gray-400: #a3a3a3;
-  --color-gray-900: #1a1a1a;
+  --color-gray-100: var(--color-neutral-100);
+  --color-gray-200: var(--color-neutral-200);
+  --color-gray-300: var(--color-neutral-300);
+  --color-gray-400: var(--color-neutral-400);
+  --color-gray-900: var(--color-neutral-900);
 
-  --color-border: var(--color-gray-200);
-  --color-hover: var(--color-gray-100);
-  --color-disabled: var(--color-gray-300);
+  --color-border: var(--border);
+  --color-hover: var(--muted);
+  --color-disabled: var(--disabled);
 
-  // rezervisano: tanka linija boje samo za trenutno aktivnu notu/element
+  // rezervisano: tanka linija boje samo za trenutno aktivnu notu/element (editor-only).
+  // Mora pratiti SELECTED_NOTE_COLOR u notation-renderer.service.ts.
   --color-accent: #3b5bfd;
-
-  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   --radius-sm: 3px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 16px;
   --space-4: 24px;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  height: 100%;
-  margin: 0;
-}
-
-body {
-  font-family: var(--font-sans);
-  color: var(--color-fg);
-  background: var(--color-bg);
-  -webkit-font-smoothing: antialiased;
 }
 
 button {

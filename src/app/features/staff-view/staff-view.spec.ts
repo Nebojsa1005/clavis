@@ -7,6 +7,7 @@ import { NoteInputService } from '../../core/state/note-input.service';
 import { ScoreModelService } from '../../core/state/score-model.service';
 import { SelectionService } from '../../core/state/selection.service';
 import { ViewZoomService } from '../../core/state/view-zoom.service';
+import { NOTE_GLYPHS, NOTE_GLYPHS_STEM_DOWN } from '../../shared/smufl-glyphs';
 import { StaffView } from './staff-view';
 
 describe('StaffView', () => {
@@ -127,14 +128,47 @@ describe('StaffView', () => {
     noteInput.setActive(true);
     move();
     fixture.detectChanges();
-    const ghost = fixture.nativeElement.querySelector('.note-ghost') as HTMLElement;
-    expect(ghost.textContent?.trim()).toBe('D5');
+    const ghost = fixture.nativeElement.querySelector('.note-ghost') as SVGElement;
+    expect(fixture.nativeElement.querySelector('.note-ghost__label').textContent?.trim()).toBe('D5');
     // Snapped onto the line, not left where the pointer happened to be.
     expect(parseFloat(ghost.style.top)).toBeCloseTo(topLineY + halfStepPx * 2, 5);
 
     host.dispatchEvent(new MouseEvent('mouseleave'));
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.note-ghost')).toBeNull();
+  });
+
+  it('draws the preview as a note of the selected duration, with ledger lines and dot', () => {
+    renderSpy.and.callThrough();
+    const fixture = TestBed.createComponent(StaffView);
+    fixture.detectChanges();
+    const host = fixture.nativeElement.querySelector('.staff-canvas') as HTMLDivElement;
+    spyOn(host, 'getBoundingClientRect').and.returnValue({ top: 0, left: 0 } as DOMRect);
+    const { topLineY, halfStepPx } = TestBed.inject(NotationRendererService).getStaffGeometry();
+    const moveTo = (steps: number) => {
+      host.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 200, clientY: topLineY + halfStepPx * steps }));
+      fixture.detectChanges();
+    };
+    const glyph = () => fixture.nativeElement.querySelector('.note-ghost path')?.getAttribute('d');
+    const ledgers = () => fixture.nativeElement.querySelectorAll('.note-ghost line').length;
+
+    noteInput.setActive(true);
+    noteInput.setDuration('half');
+    moveTo(6); // G4, below the middle line: stem up
+    expect(glyph()).toBe(NOTE_GLYPHS.half.path);
+    expect(ledgers()).toBe(0);
+
+    moveTo(2); // D5, above the middle line: stem down
+    expect(glyph()).toBe(NOTE_GLYPHS_STEM_DOWN.half.path);
+
+    moveTo(10); // C4, one ledger line below
+    expect(ledgers()).toBe(1);
+
+    noteInput.setDuration('eighth');
+    noteInput.toggleDotted();
+    moveTo(6);
+    expect(glyph()).toBe(NOTE_GLYPHS.eighth.path);
+    expect(fixture.nativeElement.querySelectorAll('.note-ghost path').length).toBe(2);
   });
 
   it('zooms on a pinch (Ctrl + wheel) but leaves plain scrolling alone', () => {

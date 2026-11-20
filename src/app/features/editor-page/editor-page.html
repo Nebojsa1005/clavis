@@ -1,0 +1,218 @@
+<div class="shell">
+  <header class="editor-header">
+    <!-- Row 1: app bar, same anatomy as the landing page nav. -->
+    <div class="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 pt-2.5 lg:flex-nowrap lg:pt-0">
+      <h1 class="m-0 shrink-0 font-display text-lg font-semibold tracking-tight">
+        <a routerLink="/" hlmTooltip="Početna strana" position="bottom"><app-logo /></a>
+      </h1>
+      <span class="h-5 w-px shrink-0 bg-border" aria-hidden="true"></span>
+      <span class="score-title" [hlmTooltip]="session.currentName()" position="bottom">
+        {{ session.currentName() }}@if (session.dirty()) {<span class="score-title__dirty" hlmTooltip="Nesačuvane izmene" position="bottom"> •</span>}
+      </span>
+
+      <nav class="order-last -mx-2 flex w-[calc(100%+1rem)] min-w-0 items-center gap-1 overflow-x-auto pb-2 lg:order-none lg:mx-0 lg:ml-auto lg:w-auto lg:pb-0" aria-label="Fajl">
+        <button hlmBtn variant="ghost" size="sm" type="button" (click)="onNew()" hlmTooltip="Nova, prazna partitura" position="bottom">Novo</button>
+        <button hlmBtn variant="ghost" size="sm" type="button" (click)="onOpen()" hlmTooltip="Otvori sačuvanu partituru" position="bottom">Otvori</button>
+        <button hlmBtn variant="ghost" size="sm" type="button" (click)="onSaveAs()" hlmTooltip="Sačuvaj kao nova partitura" position="bottom">Sačuvaj kao</button>
+        <input
+          type="file"
+          accept="application/json"
+          class="visually-hidden"
+          #jsonFileInput
+          (change)="onImportJsonFile($event)"
+        />
+        <button hlmBtn variant="ghost" size="sm" type="button" (click)="jsonFileInput.click()" hlmTooltip="Import JSON" position="bottom">Import</button>
+        <button hlmBtn variant="ghost" size="sm" type="button" (click)="onExportJson()" hlmTooltip="Export JSON" position="bottom">JSON</button>
+
+        <span class="mx-2 h-5 w-px shrink-0 bg-border" aria-hidden="true"></span>
+        <span class="hidden pr-1 text-caption text-muted-foreground sm:inline">Export</span>
+        <div class="segmented" role="group" aria-label="Export">
+          <button hlmBtn variant="ghost" size="sm" type="button" (click)="onExportMusicXml()" hlmTooltip="Export MusicXML" position="bottom">XML</button>
+          <button hlmBtn variant="ghost" size="sm" type="button" (click)="onExportMidi()" hlmTooltip="Export MIDI" position="bottom">MIDI</button>
+          <button hlmBtn variant="ghost" size="sm" type="button" (click)="onExportPng()" hlmTooltip="Export PNG" position="bottom">PNG</button>
+          <button hlmBtn variant="ghost" size="sm" type="button" (click)="onExportSvg()" hlmTooltip="Export SVG" position="bottom">SVG</button>
+          <button hlmBtn variant="ghost" size="sm" type="button" (click)="onExportPdf()" hlmTooltip="Export PDF (A4)" position="bottom">PDF</button>
+        </div>
+      </nav>
+
+      <button hlmBtn size="sm" type="button" class="ml-auto shrink-0 px-4 lg:ml-2" (click)="onSave()" hlmTooltip="Sačuvaj (Ctrl+S)" position="bottom">Sačuvaj</button>
+    </div>
+
+    <!-- Row 2: score tools. Undo/Redo labels collapse to icons below xl. -->
+    <div class="toolbar flex flex-wrap items-center gap-x-3 gap-y-2 xl:gap-x-4 border-b border-border px-4 py-2">
+      <button
+        hlmBtn
+        variant="outline"
+        size="sm"
+        type="button"
+        class="toggle-btn"
+        [class.active]="noteInput.active()"
+        [attr.aria-pressed]="noteInput.active()"
+        (click)="onToggleNoteInput()"
+        hlmTooltip="Mod unosa nota (N)" position="bottom"
+      >
+        <span class="toggle-dot" aria-hidden="true"></span>
+        Mod unosa
+        <kbd class="kbd hidden xl:inline-block">N</kbd>
+      </button>
+
+      <div class="flex min-w-0 flex-wrap items-center gap-1.5" role="group" aria-label="Partitura">
+        <select class="toolbar__select" aria-label="Ključ" hlmTooltip="Ključ" position="bottom" (change)="onClefChange($event)">
+          @for (option of clefOptions; track option.value) {
+            <option [value]="option.value" [selected]="option.value === scoreModel.score().clef">
+              {{ option.label }}
+            </option>
+          }
+        </select>
+        <app-time-signature-control />
+        <app-key-signature-control />
+      </div>
+
+      <div class="segmented" role="group" aria-label="Zum">
+        <button hlmBtn variant="ghost" size="sm" type="button" [disabled]="!viewZoom.canZoomOut()" (click)="viewZoom.zoomOut()" aria-label="Umanji" hlmTooltip="Umanji (pinch ili Ctrl + točkić)" position="bottom">−</button>
+        <button hlmBtn variant="ghost" size="sm" type="button" class="zoom-value" (click)="viewZoom.reset()" hlmTooltip="Vrati na 100%" position="bottom">{{ viewZoom.percent() }}%</button>
+        <button hlmBtn variant="ghost" size="sm" type="button" [disabled]="!viewZoom.canZoomIn()" (click)="viewZoom.zoomIn()" aria-label="Uvećaj" hlmTooltip="Uvećaj (pinch ili Ctrl + točkić)" position="bottom">+</button>
+      </div>
+
+      <div class="segmented" role="group" aria-label="Izmene">
+        <button hlmBtn variant="ghost" size="sm" type="button" [disabled]="!scoreModel.canUndo()" (click)="onUndo()" hlmTooltip="Undo (Ctrl+Z)" position="bottom">
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4 3 7l3 3" /><path d="M3 7h6.5a3.5 3.5 0 0 1 0 7H8" /></svg>
+          <span class="max-xl:sr-only">Undo</span>
+        </button>
+        <button hlmBtn variant="ghost" size="sm" type="button" [disabled]="!scoreModel.canRedo()" (click)="onRedo()" hlmTooltip="Redo (Ctrl+Shift+Z)" position="bottom">
+          <span class="max-xl:sr-only">Redo</span>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m10 4 3 3-3 3" /><path d="M13 7H6.5a3.5 3.5 0 0 0 0 7H8" /></svg>
+        </button>
+      </div>
+
+      <div class="ml-auto flex items-center gap-2" role="group" aria-label="Plejbek">
+        <button
+          hlmBtn
+          size="icon-sm"
+          type="button"
+          (click)="onTogglePlayback()"
+          [attr.aria-pressed]="playback.isPlaying()"
+          [hlmTooltip]="playback.isPlaying() ? 'Zaustavi' : 'Pusti'" position="bottom"
+          [attr.aria-label]="playback.isPlaying() ? 'Zaustavi' : 'Pusti'"
+        >
+          @if (playback.isPlaying()) {
+            <svg class="icon icon--fill" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1" /></svg>
+          } @else {
+            <svg class="icon icon--fill" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9l7.5-4.5z" /></svg>
+          }
+        </button>
+        <label class="tempo">
+          <input
+            type="number"
+            class="bpm-input"
+            min="20"
+            max="300"
+            [value]="playback.bpm()"
+            (change)="onBpmChange($event)"
+            hlmTooltip="Tempo (BPM)" position="bottom"
+          />
+          <span class="toolbar__tempo">BPM</span>
+        </label>
+        <button
+          hlmBtn
+          variant="outline"
+          size="sm"
+          type="button"
+          class="toggle-btn"
+          [class.active]="playback.metronomeEnabled()"
+          [attr.aria-pressed]="playback.metronomeEnabled()"
+          (click)="playback.toggleMetronome()"
+          hlmTooltip="Metronom" position="bottom"
+        >
+          <span class="toggle-dot" aria-hidden="true"></span>
+          Metronom
+        </button>
+      </div>
+    </div>
+  </header>
+
+  @if (dialogMode(); as mode) {
+    <app-library-dialog [mode]="mode" (closed)="dialogMode.set(null)" />
+  }
+
+  <main class="workspace">
+    <div class="duration-palette" role="toolbar" aria-label="Trajanja nota" aria-orientation="vertical">
+      @for (option of durationOptions; track option.value) {
+        <button
+          type="button"
+          class="duration-btn"
+          [class.active]="noteInput.currentDuration() === option.value"
+          [attr.aria-pressed]="noteInput.currentDuration() === option.value"
+          [hlmTooltip]="option.label + ' (' + option.key + ')'" position="right"
+          [attr.aria-label]="option.label"
+          (click)="onSelectDuration(option.value)"
+        >
+          <!-- One shared viewBox so every note is drawn at the same scale, noteheads aligned like on a staff. -->
+          <svg class="duration-btn__glyph" viewBox="-100 -1262 860 1440" aria-hidden="true">
+            <path [attr.d]="option.glyph.path" [attr.transform]="option.value === 'whole' ? 'translate(100 0) scale(1 -1)' : 'translate(180 0) scale(1 -1)'" />
+          </svg>
+          <span class="duration-btn__key" aria-hidden="true">{{ option.key }}</span>
+        </button>
+      }
+
+      <span class="duration-palette__rule" aria-hidden="true"></span>
+
+      <button
+        type="button"
+        class="duration-btn"
+        [class.active]="noteInput.dotted()"
+        [attr.aria-pressed]="noteInput.dotted()"
+        hlmTooltip="Tačka (.)" position="right"
+        aria-label="Tačka"
+        (click)="onToggleDotted()"
+      >
+        <app-glyph class="duration-btn__dot" [glyph]="dotGlyph" />
+        <span class="duration-btn__key" aria-hidden="true">.</span>
+      </button>
+      <button
+        type="button"
+        class="duration-btn"
+        [class.active]="tieActive()"
+        [attr.aria-pressed]="tieActive()"
+        hlmTooltip="Luk trajanja (T)" position="right"
+        aria-label="Luk trajanja"
+        (click)="onToggleTie()"
+      >
+        <svg class="duration-btn__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10c2.5 5 13.5 5 16 0" /></svg>
+        <span class="duration-btn__key" aria-hidden="true">T</span>
+      </button>
+      <button
+        type="button"
+        class="duration-btn"
+        [class.active]="beamActive()"
+        [attr.aria-pressed]="beamActive()"
+        hlmTooltip="Spoji ili razdvoji note gredom (B)" position="right"
+        aria-label="Greda"
+        (click)="onToggleBeam()"
+      >
+        <svg class="duration-btn__icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M8.5 6v12M17.5 6v10" />
+          <path d="M8.5 5.2 17.5 4.2v3L8.5 8.2z" class="fill" />
+          <ellipse cx="6.4" cy="18.2" rx="2.4" ry="1.7" transform="rotate(-20 6.4 18.2)" class="fill" />
+          <ellipse cx="15.4" cy="16.2" rx="2.4" ry="1.7" transform="rotate(-20 15.4 16.2)" class="fill" />
+        </svg>
+        <span class="duration-btn__key" aria-hidden="true">B</span>
+      </button>
+      <button
+        type="button"
+        class="duration-btn"
+        hlmTooltip="Greda automatski (Shift+B)" position="right"
+        aria-label="Greda automatski"
+        (click)="onResetBeams()"
+      >
+        <svg class="duration-btn__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a7 7 0 1 0 2.1-5" /><path d="M5 4v4h4" /></svg>
+      </button>
+    </div>
+
+    <div class="staff-area">
+      <app-staff-view />
+    </div>
+
+    <app-tracks-panel />
+  </main>
+</div>

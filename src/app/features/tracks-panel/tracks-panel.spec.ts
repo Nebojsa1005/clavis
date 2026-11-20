@@ -80,7 +80,7 @@ describe('TracksPanel', () => {
   });
 
   describe('removing instruments', () => {
-    const removeButtons = () => Array.from(root().querySelectorAll('button[title="Ukloni instrument"]')) as HTMLButtonElement[];
+    const removeButtons = () => Array.from(root().querySelectorAll('button[hlmtooltip="Ukloni instrument"]')) as HTMLButtonElement[];
 
     it('removes the instrument of the pressed button', () => {
       removeButtons()[1].click();
@@ -108,7 +108,7 @@ describe('TracksPanel', () => {
   });
 
   describe('reordering instruments', () => {
-    const moveButtons = (title: string) => Array.from(root().querySelectorAll(`button[title="${title}"]`)) as HTMLButtonElement[];
+    const moveButtons = (title: string) => Array.from(root().querySelectorAll(`button[hlmtooltip="${title}"]`)) as HTMLButtonElement[];
     const names = () => Array.from(root().querySelectorAll('.part__name')).map((e) => e.textContent?.trim());
 
     it('moves an instrument down and up', () => {
@@ -131,7 +131,7 @@ describe('TracksPanel', () => {
 
   describe('renaming instruments', () => {
     const startRename = (index = 0) =>
-      (root().querySelectorAll('button[title="Preimenuj"]')[index] as HTMLButtonElement).click();
+      (root().querySelectorAll('button[hlmtooltip="Preimenuj"]')[index] as HTMLButtonElement).click();
     const input = () => root().querySelector('.part__rename') as HTMLInputElement | null;
     const names = () => Array.from(root().querySelectorAll('.part__name')).map((e) => e.textContent?.trim());
 

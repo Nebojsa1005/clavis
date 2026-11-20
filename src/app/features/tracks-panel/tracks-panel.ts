@@ -3,6 +3,8 @@ import { INSTRUMENT_PRESETS } from '../../core/models/instruments';
 import { Clef } from '../../core/models/score.model';
 import { Part } from '../../core/models/score-document';
 import { ScoreModelService } from '../../core/state/score-model.service';
+import { HlmButtonImports } from '@spartan-ng/helm/button';
+import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
 const CLEF_NAMES: Record<Clef, string> = {
@@ -18,7 +20,7 @@ const CLEF_NAMES: Record<Clef, string> = {
  */
 @Component({
   selector: 'app-tracks-panel',
-  imports: [HlmTooltipImports],
+  imports: [HlmButtonImports, HlmInputImports, HlmTooltipImports],
   templateUrl: './tracks-panel.html',
   styleUrl: './tracks-panel.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

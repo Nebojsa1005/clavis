@@ -1,13 +1,14 @@
 <section class="tracks" aria-label="Instrumenti">
-  <h2>Instrumenti</h2>
-  <ul class="parts">
+  <h2 class="mb-3 font-display text-[0.9375rem] font-semibold tracking-tight">Instrumenti</h2>
+  <ul class="m-0 list-none p-0">
     @for (part of scoreModel.document().parts; track part.id; let partIndex = $index; let first = $first; let last = $last) {
-      <li class="part">
-        <div class="part__header">
+      <li class="mb-3 border-b border-border pb-3">
+        <div class="mb-1.5 flex items-center gap-1">
           @if (editingPartId() === part.id) {
             <input
               #renameInput
-              class="part__rename"
+              hlmInput
+              class="h-7 min-w-0 flex-1 text-sm"
               type="text"
               maxlength="40"
               aria-label="Naziv instrumenta"
@@ -17,14 +18,25 @@
               (blur)="commitRename(part, renameInput.value)"
             />
           } @else {
-            <span class="part__name" hlmTooltip="Dvoklik za promenu naziva" position="left" (dblclick)="startRename(part)">{{ part.name }}</span>
-            <span class="part__actions">
-              <button type="button" class="icon-btn" hlmTooltip="Preimenuj" position="left" aria-label="Preimenuj" (click)="startRename(part)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 2.5l3 3L6 13H3v-3z" /></svg></button>
-              <button type="button" class="icon-btn" hlmTooltip="Pomeri gore" position="left" aria-label="Pomeri gore" [disabled]="first" (click)="onMove(part, -1)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4" /></svg></button>
-              <button type="button" class="icon-btn" hlmTooltip="Pomeri dole" position="left" aria-label="Pomeri dole" [disabled]="last" (click)="onMove(part, 1)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" /></svg></button>
+            <button
+              hlmBtn
+              variant="outline"
+              size="sm"
+              type="button"
+              data-part-name
+              class="h-7 min-w-0 flex-1 justify-between gap-2 border-dashed font-medium shadow-none"
+              hlmTooltip="Klikni za promenu naziva" position="left"
+              [attr.aria-label]="'Preimenuj instrument: ' + part.name"
+              (click)="startRename(part)"
+            >
+              <span class="truncate">{{ part.name }}</span>
+              <svg class="shrink-0 text-muted-foreground" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 2.5l3 3L6 13H3v-3z" /></svg>
+            </button>
+            <span class="flex gap-0.5">
+              <button hlmBtn variant="ghost" size="icon-sm" type="button" class="text-muted-foreground" hlmTooltip="Pomeri gore" position="left" aria-label="Pomeri gore" [disabled]="first" (click)="onMove(part, -1)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4" /></svg></button>
+              <button hlmBtn variant="ghost" size="icon-sm" type="button" class="text-muted-foreground" hlmTooltip="Pomeri dole" position="left" aria-label="Pomeri dole" [disabled]="last" (click)="onMove(part, 1)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" /></svg></button>
               <button
-                type="button"
-                class="icon-btn"
+                hlmBtn variant="ghost" size="icon-sm" type="button" class="text-muted-foreground"
                 hlmTooltip="Ukloni instrument" position="left"
                 aria-label="Ukloni instrument"
                 [disabled]="scoreModel.document().parts.length < 2"
@@ -35,13 +47,15 @@
             </span>
           }
         </div>
-        <ul class="staves">
+        <ul class="m-0 flex list-none flex-col gap-0.5 p-0">
           @for (staff of part.staves; track staff.id; let index = $index) {
             <li>
               <button
+                hlmBtn
+                variant="ghost"
+                size="sm"
                 type="button"
-                class="staff-btn"
-                [class.active]="staff.id === scoreModel.activeStaffId()"
+                class="relative w-full justify-start pl-3.5 font-normal text-muted-foreground aria-pressed:bg-muted aria-pressed:font-semibold aria-pressed:text-foreground aria-pressed:before:absolute aria-pressed:before:inset-y-1.5 aria-pressed:before:left-1 aria-pressed:before:w-0.5 aria-pressed:before:rounded-[1px] aria-pressed:before:bg-active-mark aria-pressed:before:content-['']"
                 [attr.aria-pressed]="staff.id === scoreModel.activeStaffId()"
                 (click)="scoreModel.setActiveStaff(staff.id)"
               >
@@ -54,13 +68,13 @@
     }
   </ul>
 
-  <div class="add">
-    <select #presetSelect class="add__select" aria-label="Instrument za dodavanje">
+  <div class="flex gap-1.5">
+    <select #presetSelect hlmInput class="h-8 min-w-0 flex-1 text-sm" aria-label="Instrument za dodavanje">
       @for (preset of presets; track preset.id) {
         <option [value]="preset.id">{{ preset.name }}</option>
       }
     </select>
-    <button type="button" class="add-btn" (click)="onAdd(presetSelect.value)">
+    <button hlmBtn variant="outline" size="sm" type="button" (click)="onAdd(presetSelect.value)">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9" /></svg>
       Dodaj
     </button>

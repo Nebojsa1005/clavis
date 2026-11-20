@@ -3,7 +3,6 @@ import { RouterLink } from '@angular/router';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { Clef, CLEFS, NoteDuration } from '../../core/models/score.model';
 import { DEFAULT_SHEET_TITLE, ExportService } from '../../core/services/export.service';
-import { PersistenceService } from '../../core/services/persistence.service';
 import { PlaybackService } from '../../core/services/playback.service';
 import { CaretService } from '../../core/state/caret.service';
 import { EditingService } from '../../core/state/editing.service';
@@ -60,7 +59,6 @@ export class EditorPage {
   private readonly editing = inject(EditingService);
   protected readonly playback = inject(PlaybackService);
   private readonly exportService = inject(ExportService);
-  private readonly persistence = inject(PersistenceService);
   protected readonly session = inject(ScoreSessionService);
   protected readonly viewZoom = inject(ViewZoomService);
 
@@ -176,45 +174,6 @@ export class EditorPage {
 
   protected onOpen(): void {
     this.dialogMode.set('open');
-  }
-
-  protected onExportJson(): void {
-    this.persistence.exportJsonFile(this.scoreModel.document());
-  }
-
-  protected onImportJsonFile(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    if (!file) {
-      return;
-    }
-
-    this.persistence
-      .importJsonFile(file)
-      .then((score) => {
-        this.session.adoptUnsaved(score, file.name.replace(/\.json$/i, '') || undefined);
-        this.selection.clear();
-      })
-      .catch((error: unknown) => {
-        window.alert(error instanceof Error ? error.message : 'Import nije uspeo.');
-      });
-  }
-
-  protected onExportMusicXml(): void {
-    this.exportService.downloadMusicXml(this.scoreModel.document());
-  }
-
-  protected onExportMidi(): void {
-    this.exportService.downloadMidi(this.scoreModel.document(), this.playback.bpm());
-  }
-
-  protected onExportSvg(): void {
-    this.exportService.downloadSvg(this.scoreModel.document(), this.sheetTitle());
-  }
-
-  protected onExportPng(): void {
-    void this.exportService.downloadPng(this.scoreModel.document(), this.sheetTitle());
   }
 
   protected onExportPdf(): void {

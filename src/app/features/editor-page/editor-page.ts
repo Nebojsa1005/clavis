@@ -147,8 +147,21 @@ export class EditorPage {
   }
 
   protected onBpmChange(event: Event): void {
-    const value = Number((event.target as HTMLInputElement).value);
-    this.playback.setBpm(value);
+    const input = event.target as HTMLInputElement;
+    // An empty or invalid field keeps the previous tempo.
+    if (input.value.trim() !== '' && Number.isFinite(Number(input.value))) {
+      this.playback.setBpm(Number(input.value));
+    }
+    // The [value] binding does not re-render when the signal is unchanged, so write the real tempo back.
+    input.value = String(this.playback.bpm());
+  }
+
+  /** Browser's own "leave page?" prompt; the library only holds the last saved version. */
+  @HostListener('window:beforeunload', ['$event'])
+  protected onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.session.dirty()) {
+      event.preventDefault();
+    }
   }
 
   protected onNew(): void {

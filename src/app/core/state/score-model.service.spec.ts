@@ -757,7 +757,8 @@ describe('ScoreModelService', () => {
     let trebleId: string;
 
     beforeEach(() => {
-      service.replaceScore(createEmptyScore());
+      // A name that differs from the presets, so the order checks below can tell the parts apart.
+      service.replaceDocument({ parts: [createPart('Instrument', [createEmptyScore()])] });
       trebleId = service.activeStaffId();
       service.addPart('piano');
       service.addPart('violin');

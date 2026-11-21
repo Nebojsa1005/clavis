@@ -74,10 +74,13 @@
           type="button"
           (click)="onTogglePlayback()"
           [attr.aria-pressed]="playback.isPlaying()"
-          [hlmTooltip]="playback.isPlaying() ? 'Zaustavi' : 'Pusti'" position="bottom"
-          [attr.aria-label]="playback.isPlaying() ? 'Zaustavi' : 'Pusti'"
+          [attr.aria-busy]="playback.loading()"
+          [hlmTooltip]="playback.loading() ? 'Učitavanje instrumenata…' : playback.isPlaying() ? 'Zaustavi' : 'Pusti'" position="bottom"
+          [attr.aria-label]="playback.loading() ? 'Učitavanje instrumenata' : playback.isPlaying() ? 'Zaustavi' : 'Pusti'"
         >
-          @if (playback.isPlaying()) {
+          @if (playback.loading()) {
+            <svg class="icon motion-safe:animate-spin" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2a6 6 0 1 1-6 6" /></svg>
+          } @else if (playback.isPlaying()) {
             <svg class="icon icon--fill" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1" /></svg>
           } @else {
             <svg class="icon icon--fill" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9l7.5-4.5z" /></svg>

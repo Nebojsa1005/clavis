@@ -1,6 +1,7 @@
 import { durationToTicks, TICKS_PER_WHOLE } from './caret.util';
 import { effectiveAccidental } from './key-signature.util';
 import { Clef, NoteDuration, NotePitch, Score, Step, TimeSignature } from './score.model';
+import { partInstrument } from './instruments';
 import { allStaves, asDocument, ScoreDocument } from './score-document';
 import { tieLinks, tiedTargetIds } from './tie.util';
 
@@ -68,6 +69,8 @@ export interface ScheduledNote {
   offsetSeconds: number;
   durationSeconds: number;
   noteName: string;
+  /** Instrument preset id of the part the note belongs to; set by `buildDocumentSchedule`. */
+  instrument?: string;
 }
 
 export interface PlaybackSchedule {
@@ -119,9 +122,12 @@ export function buildPlaybackSchedule(score: Score, bpm: number): PlaybackSchedu
 
 /** The notes of every staff of a document on one timeline; staves play simultaneously. */
 export function buildDocumentSchedule(input: Score | ScoreDocument, bpm: number): PlaybackSchedule {
-  const schedules = allStaves(asDocument(input)).map((ref) => buildPlaybackSchedule(ref.staff.score, bpm));
+  const refs = allStaves(asDocument(input));
+  const schedules = refs.map((ref) => buildPlaybackSchedule(ref.staff.score, bpm));
   return {
-    notes: schedules.flatMap((schedule) => schedule.notes).sort((a, b) => a.offsetBeats - b.offsetBeats),
+    notes: schedules
+      .flatMap((schedule, index) => schedule.notes.map((note) => ({ ...note, instrument: partInstrument(refs[index].part) })))
+      .sort((a, b) => a.offsetBeats - b.offsetBeats),
     totalBeats: Math.max(...schedules.map((schedule) => schedule.totalBeats)),
     totalSeconds: Math.max(...schedules.map((schedule) => schedule.totalSeconds)),
   };

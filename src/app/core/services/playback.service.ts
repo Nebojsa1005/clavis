@@ -22,8 +22,11 @@ export class PlaybackService {
   readonly bpm = signal(120);
   readonly metronomeEnabled = signal(false);
 
-  /** True while waiting for the audio context, so a second click cannot start a second playback. */
-  private starting = false;
+  /**
+   * True while waiting for the audio context and the instrument sounds (the first play of an
+   * instrument downloads them), so a second click cannot start a second playback.
+   */
+  readonly loading = signal(false);
 
   /** Beats per minute, where a beat is the note value of the time signature's denominator. */
   setBpm(value: number): void {
@@ -39,7 +42,7 @@ export class PlaybackService {
   }
 
   async play(score: Score | ScoreDocument): Promise<void> {
-    if (this.isPlaying() || this.starting) {
+    if (this.isPlaying() || this.loading()) {
       return;
     }
 
@@ -48,9 +51,9 @@ export class PlaybackService {
       return;
     }
 
-    this.starting = true;
+    this.loading.set(true);
     try {
-      await this.engine.start();
+      await this.engine.start([...new Set(schedule.notes.flatMap((note) => note.instrument ?? []))]);
 
       this.engine.reset();
       this.engine.setTempo(this.bpm());
@@ -61,6 +64,7 @@ export class PlaybackService {
           note.noteName,
           Math.round(note.offsetBeats * ticksPerBeat),
           Math.max(1, Math.round(note.durationBeats * ticksPerBeat * ARTICULATION)),
+          note.instrument,
         );
       }
 
@@ -71,7 +75,7 @@ export class PlaybackService {
       this.isPlaying.set(true);
       this.engine.begin();
     } finally {
-      this.starting = false;
+      this.loading.set(false);
     }
   }
 

@@ -4,6 +4,7 @@ import { LIBRARY_DB_NAME } from '../../core/services/score-library.service';
 import { ScoreModelService } from '../../core/state/score-model.service';
 import { ScoreSessionService } from '../../core/state/score-session.service';
 import { waitUntil } from '../../testing/wait-until';
+import { OmrService } from '../../core/services/omr.service';
 import { LibraryDialog, LibraryDialogMode } from './library-dialog';
 
 describe('LibraryDialog', () => {
@@ -206,6 +207,70 @@ describe('LibraryDialog', () => {
       (root().querySelector('.dialog') as HTMLElement).click();
 
       expect(closed).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('import', () => {
+    const xml =
+      '<score-partwise><part-list><score-part id="P1"><part-name>Flauta</part-name></score-part></part-list><part id="P1"><measure number="1">' +
+      '<attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>' +
+      '<note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration><type>half</type></note>' +
+      '<note><chord/><pitch><step>E</step><octave>5</octave></pitch><duration>2</duration><type>half</type></note>' +
+      '<note><pitch><step>D</step><octave>5</octave></pitch><duration>2</duration><type>half</type></note>' +
+      '</measure></part></score-partwise>';
+
+    async function choose(file: File) {
+      const input = root().querySelector('input[type=file]') as HTMLInputElement;
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change'));
+      await waitUntil(() => (fixture.detectChanges(), root().querySelector('[role=status], [role=alert]') !== null));
+    }
+
+    it('previews a MusicXML file with what gets lost, then opens it as an unsaved score', async () => {
+      await create('import');
+      await choose(new File([xml], 'Menuet.musicxml'));
+
+      expect(root().textContent).toContain('Flauta · 1 takt(ova) · 2 nota');
+      expect(root().textContent).toContain('Akord sveden na jednu notu');
+
+      (Array.from(root().querySelectorAll('button')).find((b) => b.textContent?.includes('Otvori u editoru')) as HTMLButtonElement).click();
+
+      expect(session.currentName()).toBe('Menuet');
+      expect(session.currentId()).toBeNull();
+      expect(scoreModel.document().parts[0].name).toBe('Flauta');
+      expect(closed).toHaveBeenCalled();
+    });
+
+    it('recognises a PDF through the OMR service, showing progress, then previews it', async () => {
+      let finish!: (xml: string) => void;
+      const omr = TestBed.inject(OmrService);
+      spyOn(omr, 'recognize').and.callFake((_pdf, onProgress) => {
+        onProgress({ page: 1, pages: 3 });
+        return new Promise<string>((resolve) => (finish = resolve));
+      });
+      await create('import');
+
+      await choose(new File(['%PDF-1.4'], 'Menuet.pdf'));
+      expect(root().textContent).toContain('Prepoznajem note… strana 2 od 3');
+
+      finish(xml);
+      await waitUntil(() => (fixture.detectChanges(), root().textContent!.includes('Otvori u editoru')));
+      expect(root().textContent).toContain('prepoznate automatski');
+      expect(root().textContent).toContain('Akord sveden na jednu notu');
+    });
+
+    it('shows why the import failed: OMR service down, broken file', async () => {
+      spyOn(TestBed.inject(OmrService), 'recognize').and.rejectWith(new Error('OMR servis nije dostupan'));
+      await create('import');
+
+      await choose(new File(['%PDF-1.4'], 'skenirano.pdf'));
+      await waitUntil(() => (fixture.detectChanges(), root().querySelector('[role=alert]') !== null));
+      expect(root().querySelector('[role=alert]')?.textContent).toContain('OMR servis nije dostupan');
+
+      await choose(new File(['nije xml'], 'lose.xml'));
+      await waitUntil(() => (fixture.detectChanges(), root().querySelector('[role=alert]')?.textContent?.includes('XML') === true));
     });
   });
 });

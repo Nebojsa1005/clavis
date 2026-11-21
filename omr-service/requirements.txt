@@ -1,0 +1,4 @@
+homr==0.7.1
+# homr does not pull an ONNX runtime by itself
+onnxruntime==1.32.0
+truststore==0.10.4

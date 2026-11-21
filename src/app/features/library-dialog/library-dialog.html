@@ -5,11 +5,54 @@
     aria-modal="true"
     tabindex="-1"
     #dialog
-    [attr.aria-label]="mode() === 'open' ? 'Otvori partituru' : 'Sačuvaj kao'"
+    [attr.aria-label]="mode() === 'open' ? 'Otvori partituru' : mode() === 'import' ? 'Uvezi partituru' : 'Sačuvaj kao'"
     (click)="$event.stopPropagation()"
     (keydown.escape)="close()"
   >
-    @if (mode() === 'saveAs') {
+    @if (mode() === 'import') {
+      <h2>Uvezi partituru</h2>
+      <p class="lede">MusicXML iz MuseScore-a, Sibeliusa, Finale-a ili Dorica (.musicxml, .xml, .mxl), ili PDF.</p>
+      <label
+        class="flex flex-col items-center gap-1 rounded-md border border-dashed border-border px-4 py-6 text-center"
+        [class]="recognising() ? 'opacity-60' : 'cursor-pointer hover:bg-muted'"
+      >
+        <span class="font-medium">Izaberi fajl</span>
+        <span class="text-sm text-muted-foreground">{{ recognising()?.name ?? preview()?.name ?? 'Ništa nije izabrano' }}</span>
+        <input type="file" class="sr-only" accept=".musicxml,.xml,.mxl,.pdf" [disabled]="!!recognising()" (change)="onFileChosen($event)" />
+      </label>
+
+      @if (recognising(); as r) {
+        <div class="mt-4 flex items-start gap-3 rounded-md border border-border p-3 text-sm" role="status" aria-live="polite">
+          <svg class="mt-0.5 size-4 shrink-0 motion-safe:animate-spin" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M8 2a6 6 0 1 1-6 6" /></svg>
+          <div>
+            <p class="m-0 font-medium">Prepoznajem note…@if (r.progress.pages) { strana {{ r.progress.page + 1 > r.progress.pages ? r.progress.pages : r.progress.page + 1 }} od {{ r.progress.pages }}}</p>
+            <p class="m-0 mt-1 text-muted-foreground">Oko 1 minut po strani. Dijalog može ostati otvoren dok se ne završi.</p>
+          </div>
+        </div>
+      }
+
+      @if (preview(); as p) {
+        <div class="mt-4 text-sm" role="status">
+          <p class="m-0 font-medium">{{ p.summary }}</p>
+          @if (p.recognised) {
+            <p class="m-0 mt-2 text-muted-foreground">Note su prepoznate automatski: proveri ih u editoru, prepoznavanje može da pogreši.</p>
+          }
+          @if (p.result.warnings.length) {
+            <p class="m-0 mt-2 text-muted-foreground">Clavis ima jedan glas po štapu, pa se pri uvozu gubi:</p>
+            <ul class="m-0 mt-1 list-disc pl-5">
+              @for (warning of p.result.warnings; track warning) {
+                <li>{{ warning }}</li>
+              }
+            </ul>
+          } @else {
+            <p class="m-0 mt-2 text-muted-foreground">Sve je uvezeno bez gubitaka.</p>
+          }
+        </div>
+        <div class="mt-4 flex justify-end">
+          <button type="button" class="primary" (click)="onImport()">Otvori u editoru</button>
+        </div>
+      }
+    } @else if (mode() === 'saveAs') {
       <h2>Sačuvaj kao</h2>
       <p class="lede">Partitura se čuva u biblioteci ovog browsera.</p>
       <form class="save-form" (submit)="onSaveAs($event, nameInput.value)">

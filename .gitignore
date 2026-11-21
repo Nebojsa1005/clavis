@@ -44,3 +44,7 @@ Thumbs.db
 
 # Nx cache (Spartan CLI)
 /.nx
+
+# OMR service (Python)
+omr-service/.venv/
+__pycache__/

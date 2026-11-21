@@ -17,6 +17,8 @@ export interface Staff {
 export interface Part {
   readonly id: string;
   name: string;
+  /** Id of the instrument preset, used for playback; unset in documents saved before it existed. */
+  instrument?: string;
   /** One staff for most instruments, two for a grand staff (piano). */
   staves: Staff[];
 }
@@ -41,8 +43,8 @@ export function createStaff(score: Score): Staff {
   return { id: createId(), score };
 }
 
-export function createPart(name: string, scores: readonly Score[]): Part {
-  return { id: createId(), name, staves: scores.map(createStaff) };
+export function createPart(name: string, scores: readonly Score[], instrument?: string): Part {
+  return { id: createId(), name, ...(instrument && { instrument }), staves: scores.map(createStaff) };
 }
 
 export function documentFromScore(score: Score, partName = DEFAULT_PART_NAME): ScoreDocument {
@@ -63,6 +65,7 @@ export function isScoreDocument(value: unknown): value is ScoreDocument {
       return (
         typeof candidate?.['id'] === 'string' &&
         typeof candidate['name'] === 'string' &&
+        (candidate['instrument'] === undefined || typeof candidate['instrument'] === 'string') &&
         Array.isArray(staves) &&
         staves.length > 0 &&
         staves.every((staff: unknown) => {

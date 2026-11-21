@@ -10,14 +10,18 @@ class FakeEngine implements PlaybackEngine {
   readonly calls: string[] = [];
   notes: { name: string; start: number; duration: number }[] = [];
   tempos: number[] = [];
+  /** Instrument of every scheduled note, in scheduling order; kept apart so `notes` stays compact. */
+  noteInstruments: (string | undefined)[] = [];
+  loadedInstruments: readonly string[] = [];
   metronome: { endTicks: number; enabled: () => boolean } | null = null;
   end: { endTicks: number; onEnd: () => void } | null = null;
   /** When set, `start()` waits for it, like a browser waiting for a user gesture. */
   startGate: Promise<void> | null = null;
   startError: Error | null = null;
 
-  async start(): Promise<void> {
+  async start(instruments: readonly string[]): Promise<void> {
     this.calls.push('start');
+    this.loadedInstruments = instruments;
     if (this.startError) {
       throw this.startError;
     }
@@ -26,6 +30,7 @@ class FakeEngine implements PlaybackEngine {
   reset(): void {
     this.calls.push('reset');
     this.notes = [];
+    this.noteInstruments = [];
     this.metronome = null;
     this.end = null;
   }
@@ -33,9 +38,10 @@ class FakeEngine implements PlaybackEngine {
     this.calls.push('tempo');
     this.tempos.push(bpm);
   }
-  scheduleNote(name: string, start: number, duration: number): void {
+  scheduleNote(name: string, start: number, duration: number, instrument?: string): void {
     this.calls.push('note');
     this.notes.push({ name, start, duration });
+    this.noteInstruments.push(instrument);
   }
   scheduleMetronome(endTicks: number, enabled: () => boolean): void {
     this.calls.push('metronome');
@@ -298,6 +304,42 @@ describe('PlaybackService', () => {
       await service.play(score);
 
       expect(engine.notes[0].name).toBe('F#4');
+    });
+  });
+
+  describe('instruments', () => {
+    it('plays every note with the instrument of its part and loads only those instruments', async () => {
+      const violin = createPart('Moja violina', [scoreOf(quarter('E'))], 'violin');
+      const cello = createPart('Violončelo', [scoreOf(quarter('C'), quarter('D'))]);
+
+      await service.play({ parts: [violin, cello] });
+
+      expect(engine.loadedInstruments).toEqual(['violin', 'cello']);
+      const instrumentOf = (name: string, start: number) =>
+        engine.noteInstruments[engine.notes.findIndex((n) => n.name === name && n.start === start)];
+      expect(instrumentOf('E4', 0)).toBe('violin');
+      expect(instrumentOf('C4', 0)).toBe('cello');
+      expect(instrumentOf('D4', 192)).toBe('cello');
+    });
+
+    it('plays a plain score as piano', async () => {
+      await service.play(scoreOf(quarter()));
+
+      expect(engine.loadedInstruments).toEqual(['piano']);
+      expect(engine.noteInstruments).toEqual(['piano']);
+    });
+
+    it('reports loading while the instrument sounds are being fetched', async () => {
+      let release!: () => void;
+      engine.startGate = new Promise((resolve) => (release = resolve));
+
+      const playing = service.play(scoreOf(quarter()));
+      expect(service.loading()).toBeTrue();
+
+      release();
+      await playing;
+      expect(service.loading()).toBeFalse();
+      expect(service.isPlaying()).toBeTrue();
     });
   });
 });

@@ -84,6 +84,7 @@ export class ScoreModelService {
     const part = createPart(
       preset.name,
       preset.clefs.map((clef) => ({ clef, timeSignature: { ...timeSignature }, keySignature, measures: [createMeasure([])] })),
+      preset.id,
     );
     this.mutateDocument((doc) => ({ ...doc, parts: [...doc.parts, part] }));
     this.requestedStaffId.set(part.staves[0].id);

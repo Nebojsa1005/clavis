@@ -1,0 +1,209 @@
+{
+  "piano": {
+    "soundfont": "acoustic_grand_piano",
+    "notes": [
+      "C1",
+      "E1",
+      "Ab1",
+      "C2",
+      "E2",
+      "Ab2",
+      "C3",
+      "E3",
+      "Ab3",
+      "C4",
+      "E4",
+      "Ab4",
+      "C5",
+      "E5",
+      "Ab5",
+      "C6",
+      "E6",
+      "Ab6",
+      "C7"
+    ]
+  },
+  "violin": {
+    "soundfont": "violin",
+    "notes": [
+      "C3",
+      "E3",
+      "Ab3",
+      "C4",
+      "E4",
+      "Ab4",
+      "C5",
+      "E5",
+      "Ab5",
+      "C6",
+      "E6",
+      "Ab6",
+      "C7"
+    ]
+  },
+  "viola": {
+    "soundfont": "viola",
+    "notes": [
+      "C3",
+      "E3",
+      "Ab3",
+      "C4",
+      "E4",
+      "Ab4",
+      "C5",
+      "E5",
+      "Ab5",
+      "C6"
+    ]
+  },
+  "cello": {
+    "soundfont": "cello",
+    "notes": [
+      "C2",
+      "E2",
+      "Ab2",
+      "C3",
+      "E3",
+      "Ab3",
+      "C4",
+      "E4",
+      "Ab4",
+      "C5",
+      "E5",
+      "Ab5",
+      "C6"
+    ]
+  },
+  "double-bass": {
+    "soundfont": "contrabass",
+    "notes": [
+      "C1",
+      "E1",
+      "Ab1",
+      "C2",
+      "E2",
+      "Ab2",
+      "C3",
+      "E3",
+      "Ab3",
+      "C4",
+      "E4",
+      "Ab4",
+      "C5"
+    ]
+  },
+  "flute": {
+    "soundfont": "flute",
+    "notes": [
+      "C4",
+      "E4",
+      "Ab4",
+      "C5",
+      "E5",
+      "Ab5",
+      "C6",
+      "E6",
+      "Ab6",
+      "C7"
+    ]
+  },
+  "clarinet": {
+    "soundfont": "clarinet",
+    "notes": [
+      "C3",
+      "E3",
+      "Ab3",
+      "C4",
+      "E4",
+      "Ab4",
+      "C5",
+      "E5",
+      "Ab5",
+      "C6",
+      "E6",
+      "Ab6",
+      "C7"
+    ]
+  },
+  "trumpet": {
+    "soundfont": "trumpet",
+    "notes": [
+      "C3",
+      "E3",
+      "Ab3",
+      "C4",
+      "E4",
+      "Ab4",
+      "C5",
+      "E5",
+      "Ab5",
+      "C6"
+    ]
+  },
+  "trombone": {
+    "soundfont": "trombone",
+    "notes": [
+      "C2",
+      "E2",
+      "Ab2",
+      "C3",
+      "E3",
+      "Ab3",
+      "C4",
+      "E4",
+      "Ab4",
+      "C5"
+    ]
+  },
+  "guitar": {
+    "soundfont": "acoustic_guitar_nylon",
+    "notes": [
+      "C2",
+      "E2",
+      "Ab2",
+      "C3",
+      "E3",
+      "Ab3",
+      "C4",
+      "E4",
+      "Ab4",
+      "C5",
+      "E5",
+      "Ab5",
+      "C6"
+    ]
+  },
+  "bass-guitar": {
+    "soundfont": "electric_bass_finger",
+    "notes": [
+      "C1",
+      "E1",
+      "Ab1",
+      "C2",
+      "E2",
+      "Ab2",
+      "C3",
+      "E3",
+      "Ab3",
+      "C4",
+      "E4",
+      "Ab4",
+      "C5"
+    ]
+  },
+  "voice": {
+    "soundfont": "choir_aahs",
+    "notes": [
+      "C3",
+      "E3",
+      "Ab3",
+      "C4",
+      "E4",
+      "Ab4",
+      "C5",
+      "E5",
+      "Ab5",
+      "C6"
+    ]
+  }
+}

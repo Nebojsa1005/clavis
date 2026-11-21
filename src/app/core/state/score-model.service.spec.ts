@@ -528,6 +528,7 @@ describe('ScoreModelService', () => {
 
         expect(parts.length).toBe(2);
         expect(parts[1].name).toBe('Klavir');
+        expect(parts[1].instrument).toBe('piano');
         expect(parts[1].staves.map((s) => s.score.clef)).toEqual(['treble', 'bass']);
       });
 

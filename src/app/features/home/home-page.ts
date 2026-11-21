@@ -39,7 +39,7 @@ export const FAQ: Faq[] = [
   },
   {
     question: 'Da li je Clavis Editor besplatan?',
-    answer: 'Da. Clavis Editor je besplatan i nema plaćenih funkcija. Izvorni kod je javan na GitHubu.',
+    answer: 'Da. Clavis Editor je besplatan i nema plaćenih funkcija.',
   },
   {
     question: 'Koje formate Clavis Editor izvozi?',
@@ -114,7 +114,6 @@ export function structuredData(description: string) {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HomePage {
-  protected readonly sourceUrl = SOURCE_URL;
   protected readonly year = new Date().getFullYear();
   protected readonly faq = FAQ;
 

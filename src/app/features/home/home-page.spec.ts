@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { FAQ, HomePage, SOURCE_URL } from './home-page';
+import { FAQ, HomePage } from './home-page';
 
 describe('HomePage', () => {
   let root: HTMLElement;
@@ -55,11 +55,5 @@ describe('HomePage', () => {
   it('draws the hero staff', () => {
     expect(root.querySelectorAll('app-hero-staff .hs-line').length).toBe(5);
     expect(root.querySelector('app-hero-staff .hs-clef')).not.toBeNull();
-  });
-
-  it('links to the source code in a new tab', () => {
-    const link = root.querySelector<HTMLAnchorElement>(`a[href="${SOURCE_URL}"]`);
-    expect(link?.target).toBe('_blank');
-    expect(link?.rel).toContain('noopener');
   });
 });

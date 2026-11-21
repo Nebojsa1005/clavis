@@ -36,6 +36,9 @@
       ],
       "@spartan-ng/helm/input": [
         "./src/app/ui/input/src/index.ts"
+      ],
+      "@spartan-ng/helm/accordion": [
+        "./src/app/ui/accordion/src/index.ts"
       ]
     }
   },

@@ -1,0 +1,27 @@
+# Clavis Editor
+
+> Clavis Editor je besplatan notni editor koji radi u browseru, bez instalacije i naloga; jezik interfejsa je srpski.
+
+## Linkovi
+
+- [Početna strana](https://clavis-editor.vercel.app/): opis, funkcije i česta pitanja
+- [Editor](https://clavis-editor.vercel.app/editor): sam notni editor (radi samo u browseru, traži JavaScript)
+- [Sitemap](https://clavis-editor.vercel.app/sitemap.xml)
+- [Izvorni kod](https://github.com/Nebojsa1005/clavis)
+
+## Funkcije
+
+- Unos nota mišem ili tastaturom (N uključuje unos, brojevi 1–7 biraju trajanje)
+- Kursor kroz partituru; strelice pomeraju kursor kroz taktove
+- Poništavanje i ponavljanje izmena (Ctrl+Z, Ctrl+Shift+Z)
+- Plejbek u browseru, tempo od 20 do 300 BPM, metronom
+- Čuvanje partitura u lokalnoj biblioteci browsera (Ctrl+S), bez naloga i servera
+
+## Izvoz
+
+- PDF (A4)
+
+## Ograničenja
+
+- Editor je pravljen za računar sa mišem i tastaturom; nije prilagođen ekranu na dodir.
+- Partiture se čuvaju samo u browseru na uređaju korisnika.

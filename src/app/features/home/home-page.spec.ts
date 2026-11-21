@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { HomePage, SOURCE_URL } from './home-page';
+import { FAQ, HomePage, SOURCE_URL } from './home-page';
 
 describe('HomePage', () => {
   let root: HTMLElement;
@@ -16,8 +16,28 @@ describe('HomePage', () => {
     root = fixture.nativeElement as HTMLElement;
   });
 
-  it('leads with a one-line headline', () => {
+  it('leads with a single headline naming Clavis Editor', () => {
+    expect(root.querySelectorAll('h1').length).toBe(1);
+    expect(root.querySelector('h1')?.textContent).toContain('Clavis Editor');
     expect(root.querySelector('h1')?.textContent).toContain('Piši note u browseru.');
+  });
+
+  it('shows every FAQ answer open, so it reads without JavaScript', () => {
+    const regions = [...root.querySelectorAll('#pitanja [role="region"]')];
+    expect(regions.length).toBe(FAQ.length);
+    regions.forEach((r, i) => {
+      expect(r.getAttribute('data-state')).toBe('open');
+      expect(r.textContent?.trim()).toBe(FAQ[i].answer);
+    });
+  });
+
+  it('writes one JSON-LD graph whose FAQ matches the page', () => {
+    const scripts = document.head.querySelectorAll('script[type="application/ld+json"]');
+    expect(scripts.length).toBe(1);
+    const graph = JSON.parse(scripts[0].textContent ?? '')['@graph'];
+    expect(graph.map((n: { '@type': string }) => n['@type'])).toEqual(['WebSite', 'WebApplication', 'FAQPage']);
+    const shown = [...root.querySelectorAll('#pitanja hlm-accordion-trigger')].map((t) => t.textContent?.trim());
+    expect(graph[2].mainEntity.map((q: { name: string }) => q.name)).toEqual(shown);
   });
 
   it('links every "Otvori editor" button to the editor', () => {

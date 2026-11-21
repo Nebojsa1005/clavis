@@ -4,7 +4,7 @@ import { Routes } from '@angular/router';
 export const routes: Routes = [
   {
     path: '',
-    title: 'Clavis — notni editor u browseru',
+    title: 'Clavis Editor – notni editor u browseru',
     loadComponent: () => import('./features/home/home-page').then((m) => m.HomePage),
   },
   {

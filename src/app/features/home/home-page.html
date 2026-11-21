@@ -13,11 +13,12 @@
   <section class="pt-16 sm:pt-24 lg:pt-28" aria-labelledby="hero-title">
     <div class="page mx-auto">
       <h1 id="hero-title" class="max-w-[11ch] font-display text-display font-semibold text-balance">
+        <span class="mb-4 block font-sans text-body font-medium tracking-normal text-muted-foreground">Clavis Editor</span>
         Piši note u browseru.
       </h1>
       <p class="mt-6 max-w-[52ch] text-body text-muted-foreground sm:text-lg/relaxed">
-        Clavis je notni editor bez instalacije. Upiši melodiju mišem ili tastaturom, preslušaj je i
-        izvezi kao MusicXML, MIDI ili PDF.
+        Clavis Editor je besplatan notni editor koji radi u browseru, bez instalacije. Upiši melodiju
+        mišem ili tastaturom, preslušaj je i izvezi kao PDF.
       </p>
     </div>
 
@@ -100,6 +101,26 @@
           </li>
         }
       </ol>
+    </div>
+  </section>
+
+  <section id="pitanja" class="scroll-mt-20 pt-28 sm:pt-36" aria-labelledby="pitanja-title">
+    <div class="page mx-auto">
+      <h2 id="pitanja-title" class="max-w-[20ch] font-display text-h1 font-semibold">Česta pitanja</h2>
+
+      <!-- Every item starts open so the answers are readable without JavaScript and in the prerendered HTML. -->
+      <div hlmAccordion type="multiple" class="mt-12 max-w-[64ch] border-y border-border">
+        @for (item of faq; track item.question) {
+          <div hlmAccordionItem isOpened class="border-border">
+            <hlm-accordion-trigger triggerClass="font-display text-h2 font-semibold">
+              {{ item.question }}
+            </hlm-accordion-trigger>
+            <hlm-accordion-content>
+              <p class="text-body text-muted-foreground">{{ item.answer }}</p>
+            </hlm-accordion-content>
+          </div>
+        }
+      </div>
     </div>
   </section>
 
